@@ -18,7 +18,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	io2 "github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/rpcclient"
-	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/callflag"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/manifest"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/nef"
@@ -527,7 +526,7 @@ func (c *initializeContext) getContractDeployData(ctrName string, keysParam []in
 		items = append(items,
 			c.Contracts[processingContract].Hash,
 			keysParam,
-			smartcontract.Parameter{})
+			[]interface{}{})
 	case processingContract:
 		items = append(items, c.Contracts[neofsContract].Hash)
 		return items[1:] // no notary info
