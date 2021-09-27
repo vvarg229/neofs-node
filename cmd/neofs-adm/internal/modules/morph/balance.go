@@ -38,7 +38,7 @@ const (
 	// notaryEnabled signifies whether contracts were deployed in a notary-enabled environment.
 	// The setting is here to simplify testing and building the command for testnet (notary currently disabled).
 	// It will be removed eventually.
-	notaryEnabled = true
+	notaryEnabled = false
 )
 
 func dumpBalances(cmd *cobra.Command, _ []string) error {

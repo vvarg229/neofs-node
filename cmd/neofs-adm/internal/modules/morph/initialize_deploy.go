@@ -70,7 +70,6 @@ var (
 		containerContract,
 		neofsIDContract,
 		netmapContract,
-		proxyContract,
 		reputationContract,
 		subnetContract,
 	}
@@ -521,7 +520,7 @@ func getContractDeployParameters(cs *contractState, deployData []interface{}) []
 
 func (c *initializeContext) getContractDeployData(ctrName string, keysParam []interface{}) []interface{} {
 	items := make([]interface{}, 1, 6)
-	items[0] = false // notaryDisabled is false
+	items[0] = true // notaryDisabled is false
 
 	switch ctrName {
 	case neofsContract:
@@ -588,7 +587,7 @@ func (c *initializeContext) getAlphabetDeployItems(i, n int) []interface{} {
 	items := make([]interface{}, 6)
 	items[0] = false
 	items[1] = c.Contracts[netmapContract].Hash
-	items[2] = c.Contracts[proxyContract].Hash
+	items[2] = util.Uint160{}
 	items[3] = innerring.GlagoliticLetter(i).String()
 	items[4] = int64(i)
 	items[5] = int64(n)
