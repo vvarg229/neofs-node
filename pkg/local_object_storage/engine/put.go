@@ -76,6 +76,9 @@ func (e *StorageEngine) put(prm PutPrm) (PutRes, error) {
 
 			exists, err := sh.Exists(existPrm)
 			if err != nil {
+				if exists.FromMeta() {
+					e.reportShardError(sh, sh.metaErrorCount, "could not check object existence", err)
+				}
 				return // this is not ErrAlreadyRemoved error so we can go to the next shard
 			}
 
@@ -101,12 +104,20 @@ func (e *StorageEngine) put(prm PutPrm) (PutRes, error) {
 			var putPrm shard.PutPrm
 			putPrm.WithObject(prm.obj)
 
-			_, err = sh.Put(putPrm)
+			var res shard.PutRes
+			res, err = sh.Put(putPrm)
 			if err != nil {
-				e.log.Warn("could not put object in shard",
-					zap.Stringer("shard", sh.ID()),
-					zap.String("error", err.Error()),
-				)
+				if res.FromMeta() {
+					e.reportShardError(sh, sh.metaErrorCount, "could not put object in shard", err)
+					return
+				} else if res.FromBlobstor() {
+					e.reportShardError(sh, sh.writeErrorCount, "could not put object in shard", err)
+					return
+				} else {
+					e.log.Warn("could not put object in shard",
+						zap.Stringer("shard", sh.ID()),
+						zap.String("error", err.Error()))
+				}
 
 				return
 			}

@@ -14,7 +14,8 @@ type ExistsPrm struct {
 
 // ExistsRes groups the resulting values of Exists operation.
 type ExistsRes struct {
-	ex bool
+	ex      bool
+	metaErr bool
 }
 
 // WithAddress is an Exists option to set object checked for existence.
@@ -31,6 +32,11 @@ func (p ExistsRes) Exists() bool {
 	return p.ex
 }
 
+// FromMeta returns true if the error resulted from the metabase.
+func (p ExistsRes) FromMeta() bool {
+	return p.metaErr
+}
+
 // Exists checks if object is presented in shard.
 //
 // Returns any error encountered that does not allow to
@@ -38,26 +44,33 @@ func (p ExistsRes) Exists() bool {
 //
 // Returns an error of type apistatus.ObjectAlreadyRemoved if object has been marked as removed.
 func (s *Shard) Exists(prm ExistsPrm) (ExistsRes, error) {
-	exists, err := meta.Exists(s.metaBase, prm.addr)
-	if err != nil {
-		// If the shard is in degraded mode, try to consult blobstor directly.
-		// Otherwise, just return an error.
-		if s.GetMode() == ModeDegraded {
-			var p blobstor.ExistsPrm
-			p.SetAddress(prm.addr)
+	var exists bool
+	var err error
 
-			res, bErr := s.blobStor.Exists(p)
-			if bErr == nil {
-				exists = res.Exists()
-				s.log.Warn("metabase existence check finished with error",
-					zap.Stringer("address", prm.addr),
-					zap.String("error", err.Error()))
-				err = nil
-			}
+	mode := s.GetMode()
+	if mode&ModeDegraded == 0 { // In Degraded mode skip metabase consulting.
+		exists, err = meta.Exists(s.metaBase, prm.addr)
+	}
+
+	metaErr := err != nil
+	if err != nil && mode&ModeDegraded != 0 {
+		var p blobstor.ExistsPrm
+		p.SetAddress(prm.addr)
+
+		res, bErr := s.blobStor.Exists(p)
+		if bErr == nil {
+			exists = res.Exists()
+			s.log.Warn("metabase existence check finished with error",
+				zap.Stringer("address", prm.addr),
+				zap.String("error", err.Error()))
+			err = nil
+		} else if err == nil {
+			err = bErr
 		}
 	}
 
 	return ExistsRes{
-		ex: exists,
+		ex:      exists,
+		metaErr: metaErr,
 	}, err
 }
