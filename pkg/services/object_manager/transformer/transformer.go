@@ -9,6 +9,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	"github.com/nspcc-dev/tzhash/tz"
 )
 
 type payloadSizeLimiter struct {
@@ -153,17 +154,17 @@ func payloadHashersForObject(obj *object.Object, withoutHomomorphicHash bool) []
 
 	if !withoutHomomorphicHash {
 		hashers = append(hashers, &payloadChecksumHasher{
-			hasher: sha256.New(),
+			hasher: tz.New(),
 			checksumWriter: func(binChecksum []byte) {
-				if ln := len(binChecksum); ln != sha256.Size {
-					panic(fmt.Sprintf("wrong checksum length: expected %d, has %d", sha256.Size, ln))
+				if ln := len(binChecksum); ln != tz.Size {
+					panic(fmt.Sprintf("wrong checksum length: expected %d, has %d", tz.Size, ln))
 				}
 
-				csSHA := [sha256.Size]byte{}
-				copy(csSHA[:], binChecksum)
+				csTZ := [tz.Size]byte{}
+				copy(csTZ[:], binChecksum)
 
 				var cs checksum.Checksum
-				cs.SetSHA256(csSHA)
+				cs.SetTillichZemor(csTZ)
 
 				obj.SetPayloadHomomorphicHash(cs)
 			},
