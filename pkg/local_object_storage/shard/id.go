@@ -27,7 +27,7 @@ func (s *Shard) ID() *ID {
 // UpdateID reads shard ID saved in the metabase and updates it if it is missing.
 func (s *Shard) UpdateID() (err error) {
 	if err = s.metaBase.Open(); err != nil {
-		return err
+		return s.handleMetabaseFailure("open", err)
 	}
 	defer func() {
 		cErr := s.metaBase.Close()
