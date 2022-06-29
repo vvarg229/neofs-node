@@ -6,7 +6,6 @@ import (
 	"github.com/nspcc-dev/neofs-node/pkg/local_object_storage/pilorama"
 	"github.com/nspcc-dev/neofs-node/pkg/local_object_storage/shard"
 	cidSDK "github.com/nspcc-dev/neofs-sdk-go/container/id"
-	"go.uber.org/zap"
 )
 
 var _ pilorama.Forest = (*StorageEngine)(nil)
@@ -21,9 +20,9 @@ func (e *StorageEngine) TreeMove(d pilorama.CIDDescriptor, treeID string, m *pil
 			if errors.Is(err, shard.ErrReadOnlyMode) {
 				return nil, err
 			}
-			e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeMove`", err,
-				zap.Stringer("cid", d.CID),
-				zap.String("tree", treeID))
+			//e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeMove`", err,
+			//	zap.Stringer("cid", d.CID),
+			//	zap.String("tree", treeID))
 			continue
 		}
 		return lm, nil
@@ -41,9 +40,9 @@ func (e *StorageEngine) TreeAddByPath(d pilorama.CIDDescriptor, treeID string, a
 			if errors.Is(err, shard.ErrReadOnlyMode) {
 				return nil, err
 			}
-			e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeAddByPath`", err,
-				zap.Stringer("cid", d.CID),
-				zap.String("tree", treeID))
+			//e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeAddByPath`", err,
+			//	zap.Stringer("cid", d.CID),
+			//	zap.String("tree", treeID))
 			continue
 		}
 		return lm, nil
@@ -60,9 +59,9 @@ func (e *StorageEngine) TreeApply(d pilorama.CIDDescriptor, treeID string, m *pi
 			if errors.Is(err, shard.ErrReadOnlyMode) {
 				return err
 			}
-			e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeApply`", err,
-				zap.Stringer("cid", d.CID),
-				zap.String("tree", treeID))
+			//e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeApply`", err,
+			//	zap.Stringer("cid", d.CID),
+			//	zap.String("tree", treeID))
 			continue
 		}
 		return nil
@@ -99,9 +98,9 @@ func (e *StorageEngine) TreeGetMeta(cid cidSDK.ID, treeID string, nodeID piloram
 		m, p, err = sh.TreeGetMeta(cid, treeID, nodeID)
 		if err != nil {
 			if !errors.Is(err, pilorama.ErrTreeNotFound) {
-				e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeGetMeta`", err,
-					zap.Stringer("cid", cid),
-					zap.String("tree", treeID))
+				//e.reportShardError(sh, sh.writeErrorCount, "can't perform `TreeGetMeta`", err,
+				//	zap.Stringer("cid", cid),
+				//	zap.String("tree", treeID))
 			}
 			continue
 		}

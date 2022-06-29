@@ -9,7 +9,7 @@ var _ pilorama.Forest = (*Shard)(nil)
 
 // TreeMove implements the pilorama.Forest interface.
 func (s *Shard) TreeMove(d pilorama.CIDDescriptor, treeID string, m *pilorama.Move) (*pilorama.LogMove, error) {
-	if s.GetMode() != ModeReadWrite {
+	if s.GetMode() == ModeReadOnly {
 		return nil, ErrReadOnlyMode
 	}
 	return s.pilorama.TreeMove(d, treeID, m)
@@ -17,7 +17,7 @@ func (s *Shard) TreeMove(d pilorama.CIDDescriptor, treeID string, m *pilorama.Mo
 
 // TreeAddByPath implements the pilorama.Forest interface.
 func (s *Shard) TreeAddByPath(d pilorama.CIDDescriptor, treeID string, attr string, path []string, meta []pilorama.KeyValue) ([]pilorama.LogMove, error) {
-	if s.GetMode() != ModeReadWrite {
+	if s.GetMode() == ModeReadOnly {
 		return nil, ErrReadOnlyMode
 	}
 	return s.pilorama.TreeAddByPath(d, treeID, attr, path, meta)
@@ -25,7 +25,7 @@ func (s *Shard) TreeAddByPath(d pilorama.CIDDescriptor, treeID string, attr stri
 
 // TreeApply implements the pilorama.Forest interface.
 func (s *Shard) TreeApply(d pilorama.CIDDescriptor, treeID string, m *pilorama.Move) error {
-	if s.GetMode() != ModeReadWrite {
+	if s.GetMode() == ModeReadOnly {
 		return ErrReadOnlyMode
 	}
 	return s.pilorama.TreeApply(d, treeID, m)
