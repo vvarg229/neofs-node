@@ -75,6 +75,11 @@ func initAndLog(c *cfg, name string, initializer func(*cfg)) {
 func initApp(c *cfg) {
 	c.ctx, c.ctxCancel = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
+	initAndLog(c, "storage engine", func(c *cfg) {
+		fatalOnErr(c.cfgObject.cfgLocalStorage.localStorage.Open())
+		fatalOnErr(c.cfgObject.cfgLocalStorage.localStorage.Init())
+	})
+
 	initAndLog(c, "gRPC", initGRPC)
 	initAndLog(c, "netmap", initNetmapService)
 	initAndLog(c, "accounting", initAccountingService)
@@ -87,11 +92,6 @@ func initApp(c *cfg) {
 	initAndLog(c, "metrics", initMetrics)
 	initAndLog(c, "tree", initTreeService)
 	initAndLog(c, "control", initControlService)
-
-	initAndLog(c, "storage engine", func(c *cfg) {
-		fatalOnErr(c.cfgObject.cfgLocalStorage.localStorage.Open())
-		fatalOnErr(c.cfgObject.cfgLocalStorage.localStorage.Init())
-	})
 
 	initAndLog(c, "morph notifications", listenMorphNotifications)
 }
