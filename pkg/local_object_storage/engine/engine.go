@@ -81,13 +81,9 @@ type cfg struct {
 	shardPoolSize uint32
 }
 
-const defaultErrorThreshold = 30
-
 func defaultCfg() *cfg {
 	return &cfg{
 		log: zap.L(),
-
-		errorsThreshold: defaultErrorThreshold,
 
 		shardPoolSize: 20,
 	}
