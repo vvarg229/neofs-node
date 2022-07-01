@@ -5,6 +5,7 @@ import (
 
 	"github.com/nspcc-dev/neofs-node/pkg/local_object_storage/shard"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
+	objectSDK "github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
 )
 
@@ -57,6 +58,10 @@ func (e *StorageEngine) delete(prm DeletePrm) (DeleteRes, error) {
 
 			resExists, err := sh.Exists(existsPrm)
 			if err != nil {
+				_, ok := err.(*objectSDK.SplitInfoError)
+				if ok && shard.IsErrNotFound(err) && shard.IsErrRemoved(err) {
+					return true
+				}
 				if resExists.FromMeta() {
 					e.reportShardError(sh, sh.metaErrorCount, "could not check object existence", err)
 				}
