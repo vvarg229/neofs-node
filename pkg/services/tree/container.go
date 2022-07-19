@@ -19,8 +19,8 @@ type containerCache struct {
 	lru *simplelru.LRU
 }
 
-func (c *containerCache) init() {
-	c.lru, _ = simplelru.NewLRU(defaultContainerCacheSize, nil) // no error, size is positive
+func (c *containerCache) init(size int) {
+	c.lru, _ = simplelru.NewLRU(size, nil) // no error, size is positive
 }
 
 type containerCacheItem struct {
@@ -30,11 +30,6 @@ type containerCacheItem struct {
 }
 
 const defaultContainerCacheSize = 10
-
-type index struct {
-	replica uint32
-	index   uint32
-}
 
 // getContainerNodes returns nodes in the container and a position of local key in the list.
 func (s *Service) getContainerNodes(cid cidSDK.ID) ([]netmapSDK.NodeInfo, int, error) {
