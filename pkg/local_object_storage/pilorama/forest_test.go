@@ -329,20 +329,20 @@ func testForestTreeApply(t *testing.T, constructor func(t testing.TB) Forest) {
 
 	t.Run("invalid descriptor", func(t *testing.T) {
 		s := constructor(t)
-		err := s.TreeApply(CIDDescriptor{cid, 0, 0}, treeID, &Move{
+		err := s.TreeApply(CIDDescriptor{cid, 0, 0}, treeID, []Move{{
 			Child:  10,
 			Parent: 0,
 			Meta:   Meta{Time: 1, Items: []KeyValue{{"grand", []byte{1}}}},
-		})
+		}})
 		require.ErrorIs(t, err, ErrInvalidCIDDescriptor)
 	})
 
 	testApply := func(t *testing.T, s Forest, child, parent Node, meta Meta) {
-		require.NoError(t, s.TreeApply(d, treeID, &Move{
+		require.NoError(t, s.TreeApply(d, treeID, []Move{{
 			Child:  child,
 			Parent: parent,
 			Meta:   meta,
-		}))
+		}}))
 	}
 
 	t.Run("add a child, then insert a parent removal", func(t *testing.T) {
@@ -404,7 +404,7 @@ func testForestTreeGetOpLog(t *testing.T, constructor func(t testing.TB) Forest)
 	})
 
 	for i := range logs {
-		require.NoError(t, s.TreeApply(d, treeID, &logs[i]))
+		require.NoError(t, s.TreeApply(d, treeID, logs[i:i+1]))
 	}
 
 	testGetOpLog := func(t *testing.T, height uint64, m Move) {
@@ -483,7 +483,7 @@ func testForestTreeApplyRandom(t *testing.T, constructor func(t testing.TB) Fore
 		rand.Read(ops[i].Meta.Items[1].Value)
 	}
 	for i := range ops {
-		require.NoError(t, expected.TreeApply(d, treeID, &ops[i]))
+		require.NoError(t, expected.TreeApply(d, treeID, ops[i:i+1]))
 	}
 
 	for i := 0; i < iterCount; i++ {
@@ -492,7 +492,7 @@ func testForestTreeApplyRandom(t *testing.T, constructor func(t testing.TB) Fore
 
 		actual := constructor(t)
 		for i := range ops {
-			require.NoError(t, actual.TreeApply(d, treeID, &ops[i]))
+			require.NoError(t, actual.TreeApply(d, treeID, ops[i:i+1]))
 		}
 		for i := uint64(0); i < nodeCount; i++ {
 			expectedMeta, expectedParent, err := expected.TreeGetMeta(cid, treeID, i)
@@ -517,20 +517,24 @@ func BenchmarkApplySequential(b *testing.B) {
 			continue
 		}
 		b.Run(providers[i].name, func(b *testing.B) {
-			benchmarkApply(b, providers[i].construct(b), func(opCount int) []Move {
-				ops := make([]Move, opCount)
-				for i := range ops {
-					ops[i] = Move{
-						Parent: uint64(rand.Intn(benchNodeCount)),
-						Meta: Meta{
-							Time:  Timestamp(i),
-							Items: []KeyValue{{Value: []byte{0, 1, 2, 3, 4}}},
-						},
-						Child: uint64(rand.Intn(benchNodeCount)),
-					}
-				}
-				return ops
-			})
+			for _, bs := range []int{1, 2, 4} {
+				b.Run("batchsize="+strconv.Itoa(bs), func(b *testing.B) {
+					benchmarkApply(b, providers[i].construct(b), bs, func(opCount int) []Move {
+						ops := make([]Move, opCount)
+						for i := range ops {
+							ops[i] = Move{
+								Parent: uint64(rand.Intn(benchNodeCount)),
+								Meta: Meta{
+									Time:  Timestamp(i),
+									Items: []KeyValue{{Value: []byte{0, 1, 2, 3, 4}}},
+								},
+								Child: uint64(rand.Intn(benchNodeCount)),
+							}
+						}
+						return ops
+					})
+				})
+			}
 		})
 	}
 }
@@ -545,48 +549,61 @@ func BenchmarkApplyReorderLast(b *testing.B) {
 			continue
 		}
 		b.Run(providers[i].name, func(b *testing.B) {
-			benchmarkApply(b, providers[i].construct(b), func(opCount int) []Move {
-				ops := make([]Move, opCount)
-				for i := range ops {
-					ops[i] = Move{
-						Parent: uint64(rand.Intn(benchNodeCount)),
-						Meta: Meta{
-							Time:  Timestamp(i),
-							Items: []KeyValue{{Value: []byte{0, 1, 2, 3, 4}}},
-						},
-						Child: uint64(rand.Intn(benchNodeCount)),
-					}
-					if i != 0 && i%blockSize == 0 {
-						for j := 0; j < blockSize/2; j++ {
-							ops[i-j], ops[i+j-blockSize] = ops[i+j-blockSize], ops[i-j]
+			for _, bs := range []int{1, 2, 4} {
+				b.Run("batchsize="+strconv.Itoa(bs), func(b *testing.B) {
+					benchmarkApply(b, providers[i].construct(b), bs, func(opCount int) []Move {
+						ops := make([]Move, opCount)
+						for i := range ops {
+							ops[i] = Move{
+								Parent: uint64(rand.Intn(benchNodeCount)),
+								Meta: Meta{
+									Time:  Timestamp(i),
+									Items: []KeyValue{{Value: []byte{0, 1, 2, 3, 4}}},
+								},
+								Child: uint64(rand.Intn(benchNodeCount)),
+							}
+							if i != 0 && i%blockSize == 0 {
+								for j := 0; j < blockSize/2; j++ {
+									ops[i-j], ops[i+j-blockSize] = ops[i+j-blockSize], ops[i-j]
+								}
+							}
 						}
-					}
-				}
-				return ops
-			})
+						return ops
+					})
+				})
+			}
 		})
 	}
 }
 
-func benchmarkApply(b *testing.B, s Forest, genFunc func(int) []Move) {
+func benchmarkApply(b *testing.B, s Forest, batchSize int, genFunc func(int) []Move) {
 	rand.Seed(42)
 
 	ops := genFunc(b.N)
 	cid := cidtest.ID()
 	d := CIDDescriptor{cid, 0, 1}
 	treeID := "version"
-	ch := make(chan *Move, b.N)
-	for i := range ops {
-		ch <- &ops[i]
+	ch := make(chan int, b.N)
+	for i := 0; i < b.N; i++ {
+		ch <- i
 	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	b.SetParallelism(50)
+	b.SetParallelism(20)
 	b.RunParallel(func(pb *testing.PB) {
+		batch := make([]Move, 0, batchSize)
 		for pb.Next() {
-			op := <-ch
-			if err := s.TreeApply(d, treeID, op); err != nil {
+			batch = append(batch, ops[<-ch])
+			if len(batch) == batchSize {
+				if err := s.TreeApply(d, treeID, batch); err != nil {
+					b.Fatalf("error in `Apply`: %v", err)
+				}
+				batch = batch[:0]
+			}
+		}
+		if len(batch) > 0 {
+			if err := s.TreeApply(d, treeID, batch); err != nil {
 				b.Fatalf("error in `Apply`: %v", err)
 			}
 		}
@@ -662,12 +679,12 @@ func testMove(t *testing.T, s Forest, ts int, node, parent Node, d CIDDescriptor
 		items = append(items, KeyValue{AttributeVersion, []byte(version)})
 	}
 
-	require.NoError(t, s.TreeApply(d, treeID, &Move{
+	require.NoError(t, s.TreeApply(d, treeID, []Move{{
 		Parent: parent,
 		Child:  node,
 		Meta: Meta{
 			Time:  uint64(ts),
 			Items: items,
 		},
-	}))
+	}}))
 }

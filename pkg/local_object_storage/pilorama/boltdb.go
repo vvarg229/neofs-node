@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/nspcc-dev/neo-go/pkg/io"
@@ -17,10 +19,22 @@ import (
 
 type boltForest struct {
 	db *bbolt.DB
+
+	// mtx protects batches field.
+	mtx       sync.Mutex
+	batches   []batch
+	batchesCh chan batch
+	closeCh   chan struct{}
+
 	cfg
 }
 
-const defaultMaxBatchSize = 10
+type batch struct {
+	cid    cidSDK.ID
+	treeID string
+	ch     []chan error
+	m      []Move
+}
 
 var (
 	dataBucket = []byte{0}
@@ -60,7 +74,30 @@ func NewBoltForest(opts ...Option) ForestStorage {
 	return &b
 }
 
-func (t *boltForest) Init() error { return nil }
+func (t *boltForest) Init() error {
+	t.closeCh = make(chan struct{})
+
+	batchWorkersCount := t.maxBatchSize
+
+	t.batchesCh = make(chan batch, batchWorkersCount)
+	go func() {
+		tick := time.NewTicker(time.Millisecond * 20)
+		defer tick.Stop()
+		for {
+			select {
+			case <-t.closeCh:
+				return
+			case <-tick.C:
+				t.trigger()
+			}
+		}
+	}()
+	for i := 0; i < batchWorkersCount; i++ {
+		go t.applier()
+	}
+	return nil
+}
+
 func (t *boltForest) Open() error {
 	err := util.MkdirAllX(filepath.Dir(t.path), t.perm)
 	if err != nil {
@@ -91,7 +128,13 @@ func (t *boltForest) Open() error {
 		return nil
 	})
 }
-func (t *boltForest) Close() error { return t.db.Close() }
+func (t *boltForest) Close() error {
+	if t.closeCh != nil {
+		close(t.closeCh)
+		t.closeCh = nil
+	}
+	return t.db.Close()
+}
 
 // TreeMove implements the Forest interface.
 func (t *boltForest) TreeMove(d CIDDescriptor, treeID string, m *Move) (*LogMove, error) {
@@ -110,8 +153,7 @@ func (t *boltForest) TreeMove(d CIDDescriptor, treeID string, m *Move) (*LogMove
 		if m.Child == RootID {
 			m.Child = t.findSpareID(bTree)
 		}
-		lm.Move = *m
-		return t.applyOperation(bLog, bTree, &lm)
+		return t.applyOperation(bLog, bTree, []Move{*m}, &lm)
 	})
 }
 
@@ -203,20 +245,61 @@ func (t *boltForest) findSpareID(bTree *bbolt.Bucket) uint64 {
 }
 
 // TreeApply implements the Forest interface.
-func (t *boltForest) TreeApply(d CIDDescriptor, treeID string, m *Move) error {
+func (t *boltForest) TreeApply(d CIDDescriptor, treeID string, m []Move) error {
 	if !d.checkValid() {
 		return ErrInvalidCIDDescriptor
 	}
 
-	return t.db.Batch(func(tx *bbolt.Tx) error {
-		bLog, bTree, err := t.getTreeBuckets(tx, d.CID, treeID)
-		if err != nil {
-			return err
-		}
+	ch := make(chan error, 1)
+	t.addBatch(d, treeID, m, ch)
+	return <-ch
+}
 
-		lm := &LogMove{Move: *m}
-		return t.applyOperation(bLog, bTree, lm)
+func (t *boltForest) addBatch(d CIDDescriptor, treeID string, m []Move, ch chan error) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	for i := range t.batches {
+		if t.batches[i].cid.Equals(d.CID) && t.batches[i].treeID == treeID {
+			t.batches[i].ch = append(t.batches[i].ch, ch)
+			t.batches[i].m = append(t.batches[i].m, m...)
+			return
+		}
+	}
+	t.batches = append(t.batches, batch{
+		cid:    d.CID,
+		treeID: treeID,
+		ch:     []chan error{ch},
+		m:      m,
 	})
+}
+
+func (t *boltForest) trigger() {
+	t.mtx.Lock()
+	for i := range t.batches {
+		t.batchesCh <- t.batches[i]
+	}
+	t.batches = t.batches[:0]
+	t.mtx.Unlock()
+}
+
+func (t *boltForest) applier() {
+	for b := range t.batchesCh {
+		sort.Slice(b.m, func(i, j int) bool {
+			return b.m[i].Time < b.m[j].Time
+		})
+		err := t.db.Batch(func(tx *bbolt.Tx) error {
+			bLog, bTree, err := t.getTreeBuckets(tx, b.cid, b.treeID)
+			if err != nil {
+				return err
+			}
+
+			var lm LogMove
+			return t.applyOperation(bLog, bTree, b.m, &lm)
+		})
+		for i := range b.ch {
+			b.ch[i] <- err
+		}
+	}
 }
 
 func (t *boltForest) getTreeBuckets(tx *bbolt.Tx, cid cidSDK.ID, treeID string) (*bbolt.Bucket, *bbolt.Bucket, error) {
@@ -243,7 +326,8 @@ func (t *boltForest) getTreeBuckets(tx *bbolt.Tx, cid cidSDK.ID, treeID string) 
 	return bLog, bData, nil
 }
 
-func (t *boltForest) applyOperation(logBucket, treeBucket *bbolt.Bucket, lm *LogMove) error {
+// applyOperations applies log operations. Assumes lm are sorted by timestamp.
+func (t *boltForest) applyOperation(logBucket, treeBucket *bbolt.Bucket, ms []Move, lm *LogMove) error {
 	var tmp LogMove
 	var cKey [17]byte
 
@@ -255,7 +339,7 @@ func (t *boltForest) applyOperation(logBucket, treeBucket *bbolt.Bucket, lm *Log
 	r := io.NewBinReaderFromIO(b)
 
 	// 1. Undo up until the desired timestamp is here.
-	for len(key) == 8 && binary.BigEndian.Uint64(key) > lm.Time {
+	for len(key) == 8 && binary.BigEndian.Uint64(key) > ms[0].Time {
 		b.Reset(value)
 		if err := t.logFromBytes(&tmp, r); err != nil {
 			return err
@@ -266,27 +350,34 @@ func (t *boltForest) applyOperation(logBucket, treeBucket *bbolt.Bucket, lm *Log
 		key, value = c.Prev()
 	}
 
-	// 2. Insert the operation.
-	if len(key) != 8 || binary.BigEndian.Uint64(key) != lm.Time {
-		if err := t.do(logBucket, treeBucket, cKey[:], lm); err != nil {
-			return err
-		}
-	}
-	key, value = c.Next()
-
-	// 3. Re-apply all other operations.
-	for len(key) == 8 {
-		b.Reset(value)
-		if err := t.logFromBytes(&tmp, r); err != nil {
-			return err
-		}
-		if err := t.do(logBucket, treeBucket, cKey[:], &tmp); err != nil {
-			return err
+	var i int
+	for {
+		// 2. Insert the operation.
+		if len(key) != 8 || binary.BigEndian.Uint64(key) != ms[i].Time {
+			lm.Move = ms[i]
+			if err := t.do(logBucket, treeBucket, cKey[:], lm); err != nil {
+				return err
+			}
 		}
 		key, value = c.Next()
-	}
 
-	return nil
+		i++
+
+		// 3. Re-apply all other operations.
+		for len(key) == 8 && (i == len(ms) || binary.BigEndian.Uint64(key) < ms[i].Time) {
+			b.Reset(value)
+			if err := t.logFromBytes(&tmp, r); err != nil {
+				return err
+			}
+			if err := t.do(logBucket, treeBucket, cKey[:], &tmp); err != nil {
+				return err
+			}
+			key, value = c.Next()
+		}
+		if i == len(ms) {
+			return nil
+		}
+	}
 }
 
 func (t *boltForest) do(lb *bbolt.Bucket, b *bbolt.Bucket, key []byte, op *LogMove) error {

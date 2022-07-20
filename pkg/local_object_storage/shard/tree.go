@@ -24,7 +24,7 @@ func (s *Shard) TreeAddByPath(d pilorama.CIDDescriptor, treeID string, attr stri
 }
 
 // TreeApply implements the pilorama.Forest interface.
-func (s *Shard) TreeApply(d pilorama.CIDDescriptor, treeID string, m *pilorama.Move) error {
+func (s *Shard) TreeApply(d pilorama.CIDDescriptor, treeID string, m []pilorama.Move) error {
 	if s.GetMode() == ModeReadOnly {
 		return ErrReadOnlyMode
 	}

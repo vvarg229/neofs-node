@@ -17,7 +17,7 @@ type Forest interface {
 	// Internal nodes in path should have exactly one attribute, otherwise a new node is created.
 	TreeAddByPath(d CIDDescriptor, treeID string, attr string, path []string, meta []KeyValue) ([]LogMove, error)
 	// TreeApply applies replicated operation from another node.
-	TreeApply(d CIDDescriptor, treeID string, m *Move) error
+	TreeApply(d CIDDescriptor, treeID string, m []Move) error
 	// TreeGetByPath returns all nodes corresponding to the path.
 	// The path is constructed by descending from the root using the values of the
 	// AttributeFilename in meta.

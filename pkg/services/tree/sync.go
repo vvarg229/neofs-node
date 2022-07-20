@@ -89,7 +89,7 @@ func (s *Service) synchronizeSingle(ctx context.Context, cid cid.ID, treeID stri
 				return newHeight, err
 			}
 			d := pilorama.CIDDescriptor{CID: cid}
-			if err := s.forest.TreeApply(d, treeID, m); err != nil {
+			if err := s.forest.TreeApply(d, treeID, []pilorama.Move{*m}); err != nil {
 				return newHeight, err
 			}
 			if m.Time > newHeight {

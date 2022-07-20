@@ -51,7 +51,7 @@ func (e *StorageEngine) TreeAddByPath(d pilorama.CIDDescriptor, treeID string, a
 }
 
 // TreeApply implements the pilorama.Forest interface.
-func (e *StorageEngine) TreeApply(d pilorama.CIDDescriptor, treeID string, m *pilorama.Move) error {
+func (e *StorageEngine) TreeApply(d pilorama.CIDDescriptor, treeID string, m []pilorama.Move) error {
 	var err error
 	for _, sh := range e.sortShardsByWeight(d.CID) {
 		err = sh.TreeApply(d, treeID, m)

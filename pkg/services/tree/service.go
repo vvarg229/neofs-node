@@ -456,11 +456,11 @@ func (s *Service) Apply(_ context.Context, req *ApplyRequest) (*ApplyResponse, e
 
 	d := pilorama.CIDDescriptor{CID: cid, Position: pos, Size: size}
 	resp := &ApplyResponse{Body: &ApplyResponse_Body{}, Signature: &Signature{}}
-	return resp, s.forest.TreeApply(d, req.GetBody().GetTreeId(), &pilorama.Move{
+	return resp, s.forest.TreeApply(d, req.GetBody().GetTreeId(), []pilorama.Move{{
 		Parent: op.GetParentId(),
 		Child:  op.GetChildId(),
 		Meta:   meta,
-	})
+	}})
 }
 
 func (s *Service) GetOpLog(req *GetOpLogRequest, srv TreeService_GetOpLogServer) error {

@@ -89,7 +89,7 @@ func (f *memoryForest) TreeAddByPath(d CIDDescriptor, treeID string, attr string
 }
 
 // TreeApply implements the Forest interface.
-func (f *memoryForest) TreeApply(d CIDDescriptor, treeID string, op *Move) error {
+func (f *memoryForest) TreeApply(d CIDDescriptor, treeID string, op []Move) error {
 	if !d.checkValid() {
 		return ErrInvalidCIDDescriptor
 	}
@@ -101,7 +101,14 @@ func (f *memoryForest) TreeApply(d CIDDescriptor, treeID string, op *Move) error
 		f.treeMap[fullID] = s
 	}
 
-	return s.Apply(op)
+	for i := range op {
+		err := s.Apply(&op[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (f *memoryForest) Init() error {
