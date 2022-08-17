@@ -31,6 +31,11 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("initialization error: %w", err)
 	}
 
+	nnsCs, err := c.Client.GetContractStateByID(1)
+	if err != nil {
+		panic(err)
+	}
+
 	/* FIX for mainnet, set hardcoded hashes. */
 	hashes := map[string]string{
 		//"neofs.neofs":      "2cafa46838e8b564468ebd868dcafdd99dce6221",
@@ -50,11 +55,6 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 		/* "zhivete": */ getAlphabetNNSDomain(6): "5b17c579bf56884fd68af152432b3b5aee7aee76",
 	}
 
-	nnsCs, err := c.Client.GetContractStateByID(1)
-	if err != nil {
-		panic(err)
-	}
-
 	w := io.NewBufBinWriter()
 	for name, sh := range hashes {
 		h, err := util.Uint160DecodeStringLE(sh)
@@ -65,6 +65,8 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 		if err != nil || cs.Hash != h {
 			return fmt.Errorf("contract %s should have hash %s, but: %w", name, sh, err)
 		}
+		emit.AppCall(w.BinWriter, nnsCs.Hash, "renew", callflag.All,
+			name)
 		emit.AppCall(w.BinWriter, nnsCs.Hash, "addRecord", callflag.All,
 			name, int64(nns.TXT), h.StringLE())
 		c.Command.Printf("NNS: Set %s -> %s\n", name, h.StringLE())
