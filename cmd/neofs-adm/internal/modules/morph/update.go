@@ -33,7 +33,7 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 
 	/* FIX for mainnet, set hardcoded hashes. */
 	hashes := map[string]string{
-		"neofs.neofs":      "2cafa46838e8b564468ebd868dcafdd99dce6221",
+		//"neofs.neofs":      "2cafa46838e8b564468ebd868dcafdd99dce6221",
 		"audit.neofs":      "85fe181f4aa3cbdc94023d97c69001ece0730398",
 		"balance.neofs":    "dc1ec98d9d0c5f9dfade16144defe08cffc5ca55",
 		"container.neofs":  "1b6e68d299b570e1cb7e86eadfdc06aa2e8e0cc5",
