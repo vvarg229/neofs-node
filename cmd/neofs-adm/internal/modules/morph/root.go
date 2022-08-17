@@ -188,6 +188,16 @@ var (
 		RunE: updateContracts,
 	}
 
+	hardcodeNNSCmd = &cobra.Command{
+		Use:   "hardcode-nns",
+		Short: "FIX for mainnet update",
+		PreRun: func(cmd *cobra.Command, _ []string) {
+			_ = viper.BindPFlag(alphabetWalletsFlag, cmd.Flags().Lookup(alphabetWalletsFlag))
+			_ = viper.BindPFlag(endpointFlag, cmd.Flags().Lookup(endpointFlag))
+		},
+		RunE: hardcodeNNS,
+	}
+
 	dumpContainersCmd = &cobra.Command{
 		Use:   "dump-containers",
 		Short: "Dump NeoFS containers to file",
@@ -273,6 +283,10 @@ func init() {
 	dumpBalancesCmd.Flags().BoolP(dumpBalancesAlphabetFlag, "a", false, "dump balances of alphabet contracts")
 	dumpBalancesCmd.Flags().BoolP(dumpBalancesProxyFlag, "p", false, "dump balances of the proxy contract")
 	dumpBalancesCmd.Flags().Bool(dumpBalancesUseScriptHashFlag, false, "use script-hash format for addresses")
+
+	RootCmd.AddCommand(hardcodeNNSCmd)
+	hardcodeNNSCmd.Flags().String(alphabetWalletsFlag, "", "path to alphabet wallets dir")
+	hardcodeNNSCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")
 
 	RootCmd.AddCommand(updateContractsCmd)
 	updateContractsCmd.Flags().String(alphabetWalletsFlag, "", "path to alphabet wallets dir")
