@@ -7,7 +7,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/callflag"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm/emit"
-	"github.com/nspcc-dev/neofs-contract/nns"
+	"github.com/nspcc-dev/neo-go/pkg/vm/opcode"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -45,7 +45,6 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 		"neofsid.neofs":    "0a64ce753653cc97c0467e1334d9d3678ca8c682",
 		"netmap.neofs":     "7c5bdb23e36cc7cce95bf42f3ab9e452c2501df1",
 		"reputation.neofs": "7ad824fd1eeb1565be2cee3889214b9aa605d2fc",
-		"subnet.neofs":     "70d5b161d7fc7f6ba32d324d88bf74327f15ca8d",
 		/* "az": */ getAlphabetNNSDomain(0): "2392438eb31100857c0f161c66791872b249aa13",
 		/* "buky": */ getAlphabetNNSDomain(1): "83ef4226d5d6519ca9c99a5de13b1b5ca223a6ad",
 		/* "vedi": */ getAlphabetNNSDomain(2): "6250927beaa9aa5a00171379dcb7187b0c91d17d",
@@ -65,11 +64,14 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 		if err != nil || cs.Hash != h {
 			return fmt.Errorf("contract %s should have hash %s, but: %w", name, sh, err)
 		}
-		emit.AppCall(w.BinWriter, nnsCs.Hash, "renew", callflag.All,
-			name)
-		emit.AppCall(w.BinWriter, nnsCs.Hash, "addRecord", callflag.All,
-			name, int64(nns.TXT), h.StringLE())
-		c.Command.Printf("NNS: Set %s -> %s\n", name, h.StringLE())
+		c.Command.Printf("Domain %s will be registered again\n", name)
+		emit.AppCall(w.BinWriter, nnsCs.Hash, "register", callflag.All,
+			name, c.CommitteeAcc.Contract.ScriptHash(),
+			"ops@nspcc.ru", int64(3600), int64(600), int64(604800), int64(3600))
+		emit.Opcodes(w.BinWriter, opcode.ASSERT)
+		//emit.AppCall(w.BinWriter, nnsCs.Hash, "addRecord", callflag.All,
+		//	name, int64(nns.TXT), h.StringLE())
+		//c.Command.Printf("NNS: Set %s -> %s\n", name, h.StringLE())
 	}
 	if w.Err != nil {
 		panic(w.Err)
