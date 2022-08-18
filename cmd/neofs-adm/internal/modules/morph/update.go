@@ -55,6 +55,7 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 	}
 
 	w := io.NewBufBinWriter()
+	emit.AppCall(w.BinWriter, nnsCs.Hash, "setPrice", callflag.All, 1)
 	for name, sh := range hashes {
 		h, err := util.Uint160DecodeStringLE(sh)
 		if err != nil {
@@ -73,6 +74,7 @@ func hardcodeNNS(cmd *cobra.Command, _ []string) error {
 		//	name, int64(nns.TXT), h.StringLE())
 		//c.Command.Printf("NNS: Set %s -> %s\n", name, h.StringLE())
 	}
+	emit.AppCall(w.BinWriter, nnsCs.Hash, "setPrice", callflag.All, 10_0000_0000)
 	if w.Err != nil {
 		panic(w.Err)
 	}
