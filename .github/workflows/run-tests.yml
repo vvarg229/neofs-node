@@ -45,8 +45,19 @@ jobs:
       - name: Checkout neofs-node repository
         uses: actions/checkout@v3
         with:
-          repository: ${{ github.repository }}
-          ref: ${{ github.event.inputs.neofs_node_ref || github.head_ref || github.ref_name }}
+          repository: >
+            ${{
+              github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name ||
+              github.repository
+            }}
+          ref: >
+            ${{
+              github.event_name == 'pull_request' && github.event.pull_request.head.ref ||
+              github.event_name == 'push' && github.ref_name ||
+              github.event_name == 'release' && github.event.release.tag_name ||
+              github.event.inputs.neofs_node_ref ||
+              github.ref_name
+            }}
           path: neofs-node
 
 ################################################################
