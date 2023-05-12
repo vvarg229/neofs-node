@@ -15,7 +15,7 @@ BIN = bin
 RELEASE = release
 DIRS = $(BIN) $(RELEASE)
 
-# List of binaries to build.
+# List of binaries to build. :)
 CMDS = $(notdir $(basename $(wildcard cmd/*)))
 BINS = $(addprefix $(BIN)/, $(CMDS))
 
