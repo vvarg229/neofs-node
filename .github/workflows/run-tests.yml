@@ -48,7 +48,7 @@ jobs:
           repository: github.repository
           ref: >
             ${{
-              github.event_name == 'pull_request' && 'refs/pull/' + github.event.pull_request.number + '/head' ||
+              github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) ||
               github.event_name == 'push' && github.ref_name ||
               github.event_name == 'release' && github.event.release.tag_name ||
               github.event.inputs.neofs_node_ref ||
