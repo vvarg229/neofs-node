@@ -45,7 +45,7 @@ jobs:
       - name: Checkout neofs-node repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-dev-env
+          repository: nspcc-dev/neofs-node
           ref: 'v0.36.1'
           path: neofs-node
 
