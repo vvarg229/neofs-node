@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/nspcc-dev/neo-go/pkg/core/native/noderoles"
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
@@ -24,7 +24,6 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/vm/vmstate"
 	"github.com/nspcc-dev/neo-go/pkg/wallet"
 	"github.com/nspcc-dev/neofs-node/pkg/util/logger"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -59,7 +58,7 @@ type Client struct {
 
 	cfg cfg
 
-	endpoints endpoints
+	endpoints []string
 
 	// switchLock protects endpoints, inactive, and subscription-related fields.
 	// It is taken exclusively during endpoint switch and locked in shared mode
@@ -73,11 +72,6 @@ type Client struct {
 	// establish connection to any of the
 	// provided RPC endpoints
 	inactive bool
-
-	// indicates that Client has already started
-	// goroutine that tries to switch to the higher
-	// priority RPC node
-	switchIsActive atomic.Bool
 }
 
 type cache struct {
@@ -85,7 +79,7 @@ type cache struct {
 
 	nnsHash   *util.Uint160
 	gKey      *keys.PublicKey
-	txHeights *lru.Cache
+	txHeights *lru.Cache[util.Uint256, uint32]
 }
 
 func (c cache) nns() *util.Uint160 {
@@ -166,7 +160,7 @@ func wrapNeoFSError(err error) error {
 
 // Invoke invokes contract method by sending transaction into blockchain.
 // Supported args types: int64, string, util.Uint160, []byte and bool.
-func (c *Client) Invoke(contract util.Uint160, fee fixedn.Fixed8, method string, args ...interface{}) error {
+func (c *Client) Invoke(contract util.Uint160, fee fixedn.Fixed8, method string, args ...any) error {
 	c.switchLock.RLock()
 	defer c.switchLock.RUnlock()
 
@@ -189,7 +183,7 @@ func (c *Client) Invoke(contract util.Uint160, fee fixedn.Fixed8, method string,
 
 // TestInvoke invokes contract method locally in neo-go node. This method should
 // be used to read data from smart-contract.
-func (c *Client) TestInvoke(contract util.Uint160, method string, args ...interface{}) (res []stackitem.Item, err error) {
+func (c *Client) TestInvoke(contract util.Uint160, method string, args ...any) (res []stackitem.Item, err error) {
 	c.switchLock.RLock()
 	defer c.switchLock.RUnlock()
 
