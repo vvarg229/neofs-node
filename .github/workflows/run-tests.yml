@@ -49,6 +49,11 @@ jobs:
           ref: 'v0.36.1'
           path: neofs-node
 
+      - name: Checkout neofs-node-run-tests repository
+        uses: actions/checkout@v3
+        with:
+          path: neofs-node-run-tests
+
 ################################################################
 #      - name: Set up Go
 #        uses: actions/setup-go@v4
@@ -145,14 +150,14 @@ jobs:
 
       - name: Add NeoFS storage and NeoFS ir docker TAGs to testcases-env config file
         run: |
-          sed -i "s/NODE_VERSION=.*/NODE_VERSION=${{ env.CURRENT_TAG }}/g" .github/testcases-env
-          sed -i "s/IR_VERSION=.*/IR_VERSION=${{ env.CURRENT_TAG }}/g" .github/testcases-env
+          sed -i "s/NODE_VERSION=.*/NODE_VERSION=${{ env.CURRENT_TAG }}/g" ${GITHUB_WORKSPACE}/neofs-node-run-tests/.github/testcases-env
+          sed -i "s/IR_VERSION=.*/IR_VERSION=${{ env.CURRENT_TAG }}/g" ${GITHUB_WORKSPACE}/neofs-node-run-tests/.github/testcases-env
         working-directory: neofs-node
 
 ################################################################
       - name: Copy testcases-env file to testcases-env in neofs-dev-env
         run: |
-          cp .github/testcases-env ${GITHUB_WORKSPACE}/neofs-dev-env/.env
+          cp ${GITHUB_WORKSPACE}/neofs-node-run-tests/.github/testcases-env ${GITHUB_WORKSPACE}/neofs-dev-env/.env
         working-directory: neofs-node
 
 #      - name: Prepare hosts
