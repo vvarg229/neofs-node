@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}
-          ref: '7e1942b671a1a09308fcacf338459d8f59cfdeb6'
+          ref: '3cdec556ff574d3cb4d312c82b25f47f4a226d6d'
           path: neofs-node
 
       - name: Checkout neofs-node-run-tests repository
