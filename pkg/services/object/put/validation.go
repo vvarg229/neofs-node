@@ -11,11 +11,14 @@ import (
 	"github.com/nspcc-dev/neofs-node/pkg/services/object_manager/transformer"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
 	objectSDK "github.com/nspcc-dev/neofs-sdk-go/object"
+	"github.com/nspcc-dev/neofs-sdk-go/object/slicer"
 	"github.com/nspcc-dev/tzhash/tz"
 )
 
 // validatingTarget validates object format and content.
 type validatingTarget struct {
+	objectSlicer *slicer.Slicer
+
 	nextTarget transformer.ObjectTarget
 
 	fmt *object.FormatValidator
