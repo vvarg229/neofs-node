@@ -45,6 +45,8 @@ jobs:
       - name: Checkout neofs-node repository
         uses: actions/checkout@v3
         with:
+          repository: ${{ github.repository }}
+          ref: '4d48ec91f976e71c27cbae6b2031a4c06d950e8e'
           path: neofs-node
 
 ################################################################
