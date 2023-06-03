@@ -31,7 +31,7 @@ jobs:
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: vvarg-229/neofs-testcases
+          repository: vvarg229/neofs-testcases
           ref: 'tst-skip'
           path: neofs-testcases
 
