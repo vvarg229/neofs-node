@@ -211,7 +211,7 @@ jobs:
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
-        timeout-minutes: 480
+        timeout-minutes: 10
         if: github.event_name != 'pull_request'
         run: |
           source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/http_gate/test_http_bearer.py
