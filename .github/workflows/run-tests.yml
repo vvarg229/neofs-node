@@ -31,20 +31,22 @@ jobs:
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: vvarg229/neofs-testcases
-          ref: 'tst-skip'
+          repository: nspcc-dev/neofs-testcases
+          ref: 'ed751d72579f845b9fa503614541596cfd3c278c'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-dev-env
-          ref: 'master'
+          repository: notimetoname/neofs-dev-env
+          ref: 'feat/add-yml-config'
           path: neofs-dev-env
 
       - name: Checkout neofs-node repository
         uses: actions/checkout@v3
         with:
+          repository: nspcc-dev/neofs-dev-env
+          ref: 'c4f596799d604096ef0a528a0584d687ca0d7c99'
           path: neofs-node
 
 ################################################################
