@@ -1,12 +1,9 @@
 package v2
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"errors"
 	"fmt"
 
-	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	objectV2 "github.com/nspcc-dev/neofs-api-go/v2/object"
 	refsV2 "github.com/nspcc-dev/neofs-api-go/v2/refs"
 	sessionV2 "github.com/nspcc-dev/neofs-api-go/v2/session"
@@ -111,7 +108,7 @@ func getObjectIDFromRequestBody(body interface{ GetAddress() *refsV2.Address }) 
 	return &id, nil
 }
 
-func ownerFromToken(token *sessionSDK.Object) (*user.ID, *keys.PublicKey, error) {
+func ownerFromToken(token *sessionSDK.Object) (*user.ID, []byte, error) {
 	// 1. First check signature of session token.
 	if !token.VerifySignature() {
 		return nil, nil, errInvalidSessionSig
@@ -122,19 +119,15 @@ func ownerFromToken(token *sessionSDK.Object) (*user.ID, *keys.PublicKey, error)
 	var tokV2 sessionV2.Token
 	token.WriteToV2(&tokV2)
 
-	tokenIssuerKey, err := unmarshalPublicKey(tokV2.GetSignature().GetKey())
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid key in session token signature: %w", err)
-	}
-
 	tokenIssuer := token.Issuer()
+	key := tokV2.GetSignature().GetKey()
 
-	if !isOwnerFromKey(tokenIssuer, tokenIssuerKey) {
+	if !isOwnerFromKey(tokenIssuer, key) {
 		// TODO: #767 in this case we can issue all owner keys from neofs.id and check once again
 		return nil, nil, errInvalidSessionOwner
 	}
 
-	return &tokenIssuer, tokenIssuerKey, nil
+	return &tokenIssuer, key, nil
 }
 
 func originalBodySignature(v *sessionV2.RequestVerificationHeader) *refsV2.Signature {
@@ -149,17 +142,16 @@ func originalBodySignature(v *sessionV2.RequestVerificationHeader) *refsV2.Signa
 	return v.GetBodySignature()
 }
 
-func unmarshalPublicKey(bs []byte) (*keys.PublicKey, error) {
-	return keys.NewPublicKeyFromBytes(bs, elliptic.P256())
-}
-
-func isOwnerFromKey(id user.ID, key *keys.PublicKey) bool {
+func isOwnerFromKey(id user.ID, key []byte) bool {
 	if key == nil {
 		return false
 	}
 
 	var id2 user.ID
-	user.IDFromKey(&id2, (ecdsa.PublicKey)(*key))
+	err := user.IDFromKey(&id2, key)
+	if err != nil {
+		return false
+	}
 
 	return id2.Equals(id)
 }

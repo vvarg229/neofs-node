@@ -10,6 +10,7 @@ Changelog for NeoFS Node
 
 ### Changed
 - NeoFS CLI generates random private key automatically if wallet is omitted (#2123)
+- `morph.validators` config can be omitted for IR in local consensus mode but must be non-empty otherwise (#2311)
 
 ### Fixed
 - Inability to restore RPC connection after the second disconnect (#2325)
@@ -28,6 +29,8 @@ Changelog for NeoFS Node
 - Update minimal supported Go version up to v1.18 (#2340)
 - tzhash library to 1.7.0 (#2348)
 - `github.com/hashicorp/golang-lru` to `v2.0.2`
+- `neofs-sdk-go` to `v1.0.0-rc.8`
+- BoltDB (`go.etcd.io/bbolt`) to 1.3.7
 
 ### Updating from v0.36.1
 - `neofs_node_object_epoch` metric for IR and SN (the same for both) has been deprecated and will be removed with the
@@ -44,6 +47,8 @@ Changelog for NeoFS Node
     $ neofs-cli util keyer <hex_key> # outputs WIF
     $ neo-go wallet import -w <wallet_file> --wif <wif_key>
   or just generate/use new keys.
+- In local consensus mode `morph.validators` in IR's config can be omitted now, `morph.consensus.committee` will be used instead.
+  For detached consensus, it is a required config parameter now.
 
 ## [0.36.1] - 2023-04-26
 

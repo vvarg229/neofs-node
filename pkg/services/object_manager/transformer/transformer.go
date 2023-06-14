@@ -2,42 +2,272 @@ package transformer
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
-	"hash"
 	"io"
 
+	"github.com/nspcc-dev/neofs-node/pkg/core/netmap"
 	"github.com/nspcc-dev/neofs-sdk-go/checksum"
+	neofscrypto "github.com/nspcc-dev/neofs-sdk-go/crypto"
 	"github.com/nspcc-dev/neofs-sdk-go/object"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	slicerSDK "github.com/nspcc-dev/neofs-sdk-go/object/slicer"
+	"github.com/nspcc-dev/neofs-sdk-go/session"
 	"github.com/nspcc-dev/tzhash/tz"
 )
 
 type payloadSizeLimiter struct {
-	maxSize, written uint64
-
+	maxSize                uint64
 	withoutHomomorphicHash bool
+	signer                 neofscrypto.Signer
+	sessionToken           *session.Object
+	networkState           netmap.State
 
-	targetInit func() ObjectTarget
+	stream     *slicerSDK.PayloadWriter
+	objSlicer  *slicerSDK.Slicer
+	targetInit TargetInitializer
 
-	target ObjectTarget
-
-	current, parent *object.Object
-
-	currentHashers, parentHashers []*payloadChecksumHasher
-
-	previous []oid.ID
-
-	chunkWriter io.Writer
-
-	splitID *object.SplitID
-
-	parAttrs []object.Attribute
+	_changedParentID         *oid.ID
+	_objectStreamInitializer *objStreamInitializer
 }
 
-type payloadChecksumHasher struct {
-	hasher hash.Hash
+// objStreamInitializer implements [slicerSDK.ObjectWriter].
+type objStreamInitializer struct {
+	targetInit TargetInitializer
 
-	checksumWriter func([]byte)
+	_psl      *payloadSizeLimiter
+	_signer   neofscrypto.Signer
+	_objType  object.Type
+	_objBuf   *object.Object
+	_splitID  *object.SplitID
+	_childIDs []oid.ID
+	_prev     *oid.ID
+}
+
+var (
+	_emptyPayloadSHA256Sum = sha256.Sum256(nil)
+	_emptyPayloadTZSum     = tz.Sum(nil)
+)
+
+func (o *objStreamInitializer) InitDataStream(header object.Object) (io.Writer, error) {
+	linkObj := len(header.Children()) > 0
+
+	// v1.0.0-rc.8 has a bug that does not allow any non-regular objects
+	// to be split, thus that check, see https://github.com/nspcc-dev/neofs-sdk-go/issues/442.
+	if o._objType != object.TypeRegular {
+		if header.SplitID() != nil {
+			// non-regular object has been split;
+			// needed to make it carefully and add
+			// original object type to the parent
+			// header only
+			if par := header.Parent(); par != nil {
+				par.SetType(o._objType)
+				err := _healHeader(o._signer, par)
+				if err != nil {
+					return nil, fmt.Errorf("broken non-regular object (parent): %w", err)
+				}
+
+				newID, _ := par.ID()
+				o._psl._changedParentID = &newID
+
+				header.SetParent(par)
+
+				// linking objects will be healed
+				// below anyway
+				if !linkObj {
+					err = _healHeader(o._signer, &header)
+					if err != nil {
+						return nil, fmt.Errorf("broken non-regular object (child): %w", err)
+					}
+				}
+			}
+		} else {
+			// non-regular object has not been split
+			// so just restore its type
+			header.SetType(o._objType)
+			err := _healHeader(o._signer, &header)
+			if err != nil {
+				return nil, fmt.Errorf("broken non-regular object: %w", err)
+			}
+
+			newID, _ := header.ID()
+			o._psl._changedParentID = &newID
+		}
+	}
+
+	// v1.0.0-rc.8 has a bug that relates linking objects, thus that
+	// check, see https://github.com/nspcc-dev/neofs-sdk-go/pull/427.
+	if linkObj {
+		header.SetPayloadSize(0)
+		header.SetChildren(o._childIDs...)
+
+		var cs checksum.Checksum
+		cs.SetSHA256(_emptyPayloadSHA256Sum)
+
+		header.SetPayloadChecksum(cs)
+
+		_, set := header.PayloadHomomorphicHash()
+		if set {
+			cs.SetTillichZemor(_emptyPayloadTZSum)
+			header.SetPayloadHomomorphicHash(cs)
+		}
+
+		err := _healHeader(o._signer, &header)
+		if err != nil {
+			return nil, fmt.Errorf("broken linking object: %w", err)
+		}
+	}
+
+	// v1.0.0-rc.8 has a bug that breaks split field for the first child object,
+	// thus that check, see https://github.com/nspcc-dev/neofs-sdk-go/issues/448.
+	if o._objBuf == nil {
+		if o._splitID == nil {
+			// the first object, it is impossible to say
+			// if there will be any others so cache it now
+			// and generate split id for a potential object
+			// chain
+			o._objBuf = &header
+			o._splitID = object.NewSplitID()
+
+			return &_memoryObjStream{objInit: o}, nil
+		}
+
+		// not the first object, attach the missing split ID
+		// and heal its header the second time; it is non-optimal
+		// but the code here is already hard to read, and it
+		// is full of kludges so let it be as stupid as possible
+
+		header.SetSplitID(o._splitID)
+		header.SetPreviousID(*o._prev)
+		err := _healHeader(o._signer, &header)
+		if err != nil {
+			return nil, fmt.Errorf("broken intermediate object: %w", err)
+		}
+
+		id, _ := header.ID()
+		o._childIDs = append(o._childIDs, id)
+		o._prev = &id
+
+		stream := o.targetInit()
+		err = stream.WriteHeader(&header)
+		if err != nil {
+			return nil, fmt.Errorf("broken intermediate object: streaming header: %w", err)
+		}
+
+		return &objStream{target: stream, _linkObj: linkObj}, nil
+	}
+
+	// more objects are here it _is_ an object chain,
+	// stream the cached one and continue chain handling
+
+	// cached object streaming (`o._objBuf`)
+
+	pl := o._objBuf.Payload()
+	hdr := o._objBuf.CutPayload()
+	hdr.SetSplitID(o._splitID)
+
+	err := _healHeader(o._signer, hdr)
+	if err != nil {
+		return nil, fmt.Errorf("broken first child: %w", err)
+	}
+
+	id, _ := hdr.ID()
+	o._childIDs = append(o._childIDs, id)
+
+	stream := o.targetInit()
+
+	err = stream.WriteHeader(hdr)
+	if err != nil {
+		return nil, fmt.Errorf("broken first child: cached header streaming: %w", err)
+	}
+
+	_, err = stream.Write(pl)
+	if err != nil {
+		return nil, fmt.Errorf("broken first child: cached payload streaming: %w", err)
+	}
+
+	_, err = stream.Close()
+	if err != nil {
+		return nil, fmt.Errorf("broken first child: stream for cached object closing: %w", err)
+	}
+
+	// mark the cached object as handled
+	o._objBuf = nil
+
+	// new object streaming (`header`)
+
+	header.SetSplitID(o._splitID)
+	header.SetPreviousID(id)
+	err = _healHeader(o._signer, &header)
+	if err != nil {
+		return nil, fmt.Errorf("broken second child: %w", err)
+	}
+
+	id, _ = header.ID()
+	o._childIDs = append(o._childIDs, id)
+	o._prev = &id
+
+	stream = o.targetInit()
+	err = stream.WriteHeader(&header)
+	if err != nil {
+		return nil, err
+	}
+
+	return &objStream{target: stream, _linkObj: linkObj}, nil
+}
+
+// _healHeader recalculates all signature related fields that are
+// broken after any setter call.
+func _healHeader(signer neofscrypto.Signer, header *object.Object) error {
+	err := object.CalculateAndSetID(header)
+	if err != nil {
+		return fmt.Errorf("id recalculation: %w", err)
+	}
+
+	err = object.CalculateAndSetSignature(signer, header)
+	if err != nil {
+		return fmt.Errorf("signature recalculation: %w", err)
+	}
+
+	return nil
+}
+
+// objStream implements [io.Writer] and [io.Closer].
+type objStream struct {
+	target ObjectTarget
+
+	_linkObj bool
+}
+
+func (o *objStream) Write(p []byte) (n int, err error) {
+	emptyPayload := len(p) == 0
+	if emptyPayload {
+		return 0, nil
+	}
+
+	if o._linkObj && !emptyPayload {
+		return 0, errors.New("linking object with payload")
+	}
+
+	return o.target.Write(p)
+}
+
+func (o *objStream) Close() error {
+	_, err := o.target.Close()
+	return err
+}
+
+type _memoryObjStream struct {
+	objInit *objStreamInitializer
+}
+
+func (m *_memoryObjStream) Write(p []byte) (n int, err error) {
+	m.objInit._objBuf.SetPayload(append(m.objInit._objBuf.Payload(), p...))
+	return len(p), nil
+}
+
+func (m *_memoryObjStream) Close() error {
+	return nil
 }
 
 // NewPayloadSizeLimiter returns ObjectTarget instance that restricts payload length
@@ -47,248 +277,110 @@ type payloadChecksumHasher struct {
 // is false.
 //
 // Objects w/ payload size less or equal than max size remain untouched.
-func NewPayloadSizeLimiter(maxSize uint64, withoutHomomorphicHash bool, targetInit TargetInitializer) ObjectTarget {
+func NewPayloadSizeLimiter(maxSize uint64, withoutHomomorphicHash bool, signer neofscrypto.Signer,
+	sToken *session.Object, nState netmap.State, nextTargetInit TargetInitializer) ObjectTarget {
 	return &payloadSizeLimiter{
 		maxSize:                maxSize,
 		withoutHomomorphicHash: withoutHomomorphicHash,
-		targetInit:             targetInit,
-		splitID:                object.NewSplitID(),
+		signer:                 signer,
+		sessionToken:           sToken,
+		networkState:           nState,
+		targetInit:             nextTargetInit,
 	}
 }
 
 func (s *payloadSizeLimiter) WriteHeader(hdr *object.Object) error {
-	s.current = fromObject(hdr)
+	var opts slicerSDK.Options
+	opts.SetObjectPayloadLimit(s.maxSize)
+	opts.SetCurrentNeoFSEpoch(s.networkState.CurrentEpoch())
+	if !s.withoutHomomorphicHash {
+		opts.CalculateHomomorphicChecksum()
+	}
 
-	s.initialize()
+	cid, _ := hdr.ContainerID()
+	streamInitializer := &objStreamInitializer{
+		targetInit: s.targetInit,
+		_psl:       s,
+		_signer:    s.signer,
+		_objType:   hdr.Type(),
+	}
+
+	if s.sessionToken == nil {
+		s.objSlicer = slicerSDK.New(s.signer, cid, *hdr.OwnerID(), streamInitializer, opts)
+	} else {
+		s.objSlicer = slicerSDK.NewSession(s.signer, cid, *s.sessionToken, streamInitializer, opts)
+	}
+
+	var attrs []string
+	if oAttrs := hdr.Attributes(); len(oAttrs) > 0 {
+		attrs = make([]string, 0, len(oAttrs)*2)
+
+		for _, a := range oAttrs {
+			attrs = append(attrs, a.Key(), a.Value())
+		}
+	}
+
+	var err error
+	s.stream, err = s.objSlicer.InitPayloadStream(attrs...)
+	if err != nil {
+		return fmt.Errorf("initializing payload stream: %w", err)
+	}
+
+	s._objectStreamInitializer = streamInitializer
 
 	return nil
 }
 
 func (s *payloadSizeLimiter) Write(p []byte) (int, error) {
-	if err := s.writeChunk(p); err != nil {
-		return 0, err
-	}
-
-	return len(p), nil
+	return s.stream.Write(p)
 }
 
 func (s *payloadSizeLimiter) Close() (*AccessIdentifiers, error) {
-	return s.release(true)
-}
-
-func (s *payloadSizeLimiter) initialize() {
-	// if it is an object after the 1st
-	if ln := len(s.previous); ln > 0 {
-		// initialize parent object once (after 1st object)
-		if ln == 1 {
-			s.detachParent()
-		}
-
-		// set previous object to the last previous identifier
-		s.current.SetPreviousID(s.previous[ln-1])
-	}
-
-	s.initializeCurrent()
-}
-
-func fromObject(obj *object.Object) *object.Object {
-	cnr, _ := obj.ContainerID()
-
-	res := object.New()
-	res.SetContainerID(cnr)
-	res.SetOwnerID(obj.OwnerID())
-	res.SetAttributes(obj.Attributes()...)
-	res.SetType(obj.Type())
-
-	// obj.SetSplitID creates splitHeader but we don't need to do it in case
-	// of small objects, so we should make nil check.
-	if obj.SplitID() != nil {
-		res.SetSplitID(obj.SplitID())
-	}
-
-	return res
-}
-
-func (s *payloadSizeLimiter) initializeCurrent() {
-	// initialize current object target
-	s.target = s.targetInit()
-
-	// create payload hashers
-	s.currentHashers = payloadHashersForObject(s.current, s.withoutHomomorphicHash)
-
-	// compose multi-writer from target and all payload hashers
-	ws := make([]io.Writer, 0, 1+len(s.currentHashers)+len(s.parentHashers))
-
-	ws = append(ws, s.target)
-
-	for i := range s.currentHashers {
-		ws = append(ws, s.currentHashers[i].hasher)
-	}
-
-	for i := range s.parentHashers {
-		ws = append(ws, s.parentHashers[i].hasher)
-	}
-
-	s.chunkWriter = io.MultiWriter(ws...)
-}
-
-func payloadHashersForObject(obj *object.Object, withoutHomomorphicHash bool) []*payloadChecksumHasher {
-	hashers := make([]*payloadChecksumHasher, 0, 2)
-
-	hashers = append(hashers, &payloadChecksumHasher{
-		hasher: sha256.New(),
-		checksumWriter: func(binChecksum []byte) {
-			if ln := len(binChecksum); ln != sha256.Size {
-				panic(fmt.Sprintf("wrong checksum length: expected %d, has %d", sha256.Size, ln))
-			}
-
-			csSHA := [sha256.Size]byte{}
-			copy(csSHA[:], binChecksum)
-
-			var cs checksum.Checksum
-			cs.SetSHA256(csSHA)
-
-			obj.SetPayloadChecksum(cs)
-		},
-	})
-
-	if !withoutHomomorphicHash {
-		hashers = append(hashers, &payloadChecksumHasher{
-			hasher: tz.New(),
-			checksumWriter: func(binChecksum []byte) {
-				if ln := len(binChecksum); ln != tz.Size {
-					panic(fmt.Sprintf("wrong checksum length: expected %d, has %d", tz.Size, ln))
-				}
-
-				csTZ := [tz.Size]byte{}
-				copy(csTZ[:], binChecksum)
-
-				var cs checksum.Checksum
-				cs.SetTillichZemor(csTZ)
-
-				obj.SetPayloadHomomorphicHash(cs)
-			},
-		})
-	}
-
-	return hashers
-}
-
-func (s *payloadSizeLimiter) release(finalize bool) (*AccessIdentifiers, error) {
-	// Arg finalize is true only when called from Close method.
-	// We finalize parent and generate linking objects only if it is more
-	// than 1 object in split-chain.
-	withParent := finalize && len(s.previous) > 0
-
-	if withParent {
-		writeHashes(s.parentHashers)
-		s.parent.SetPayloadSize(s.written)
-		s.current.SetParent(s.parent)
-	}
-
-	// release current object
-	writeHashes(s.currentHashers)
-
-	// release current, get its id
-	if err := s.target.WriteHeader(s.current); err != nil {
-		return nil, fmt.Errorf("could not write header: %w", err)
-	}
-
-	ids, err := s.target.Close()
+	err := s.stream.Close()
 	if err != nil {
-		return nil, fmt.Errorf("could not close target: %w", err)
+		return nil, err
 	}
 
-	// save identifier of the released object
-	s.previous = append(s.previous, ids.SelfID())
+	if singleObj := s._objectStreamInitializer._objBuf; singleObj != nil {
+		// we cached a single object (payload length has not exceeded
+		// the limit) so stream it now without any changes
 
-	if withParent {
-		// generate and release linking object
-		s.initializeLinking(ids.Parent())
-		s.initializeCurrent()
+		stream := s.targetInit()
+		pl := singleObj.Payload()
+		hdr := singleObj.CutPayload()
+		id, _ := hdr.ID()
 
-		if _, err := s.release(false); err != nil {
-			return nil, fmt.Errorf("could not release linking object: %w", err)
+		err = stream.WriteHeader(hdr)
+		if err != nil {
+			return nil, fmt.Errorf("single object: cached header streaming: %w", err)
 		}
+
+		_, err = stream.Write(pl)
+		if err != nil {
+			return nil, fmt.Errorf("single object: cached payload streaming: %w", err)
+		}
+
+		_, err = stream.Close()
+		if err != nil {
+			return nil, fmt.Errorf("single object: stream for cached object closing: %w", err)
+		}
+
+		ids := new(AccessIdentifiers)
+		ids.WithSelfID(id)
+
+		return ids, nil
+	}
+
+	id := s.stream.ID()
+
+	ids := new(AccessIdentifiers)
+	ids.WithSelfID(id)
+
+	// object's header has been changed therefore SDK `Slicer`
+	// returned the broken ID, let's help it and correct the ID
+	if s._changedParentID != nil {
+		ids.WithSelfID(*s._changedParentID)
 	}
 
 	return ids, nil
-}
-
-func writeHashes(hashers []*payloadChecksumHasher) {
-	for i := range hashers {
-		hashers[i].checksumWriter(hashers[i].hasher.Sum(nil))
-	}
-}
-
-func (s *payloadSizeLimiter) initializeLinking(parHdr *object.Object) {
-	s.current = fromObject(s.current)
-	s.current.SetParent(parHdr)
-	s.current.SetChildren(s.previous...)
-	s.current.SetSplitID(s.splitID)
-}
-
-func (s *payloadSizeLimiter) writeChunk(chunk []byte) error {
-	// statement is true if the previous write of bytes reached exactly the boundary.
-	if s.written > 0 && s.written%s.maxSize == 0 {
-		if s.written == s.maxSize {
-			s.prepareFirstChild()
-		}
-
-		// we need to release current object
-		if _, err := s.release(false); err != nil {
-			return fmt.Errorf("could not release object: %w", err)
-		}
-
-		// initialize another object
-		s.initialize()
-	}
-
-	var (
-		ln         = uint64(len(chunk))
-		cut        = ln
-		leftToEdge = s.maxSize - s.written%s.maxSize
-	)
-
-	// write bytes no further than the boundary of the current object
-	if ln > leftToEdge {
-		cut = leftToEdge
-	}
-
-	if _, err := s.chunkWriter.Write(chunk[:cut]); err != nil {
-		return fmt.Errorf("could not write chunk to target: %w", err)
-	}
-
-	// increase written bytes counter
-	s.written += cut
-
-	// if there are more bytes in buffer we call method again to start filling another object
-	if ln > leftToEdge {
-		return s.writeChunk(chunk[cut:])
-	}
-
-	return nil
-}
-
-func (s *payloadSizeLimiter) prepareFirstChild() {
-	// initialize split header with split ID on first object in chain
-	s.current.InitRelations()
-	s.current.SetSplitID(s.splitID)
-
-	// cut source attributes
-	s.parAttrs = s.current.Attributes()
-	s.current.SetAttributes()
-
-	// attributes will be added to parent in detachParent
-}
-
-func (s *payloadSizeLimiter) detachParent() {
-	s.parent = s.current
-	s.current = fromObject(s.parent)
-	s.parent.ResetRelations()
-	s.parent.SetSignature(nil)
-	s.parentHashers = s.currentHashers
-
-	// return source attributes
-	s.parent.SetAttributes(s.parAttrs...)
 }
