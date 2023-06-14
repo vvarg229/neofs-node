@@ -207,14 +207,14 @@ jobs:
         timeout-minutes: 120
         if: github.event_name == 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/http_gate/test_http_bearer.py
+          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
         timeout-minutes: 10
         if: github.event_name != 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/http_gate/test_http_bearer.py
+          source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
 ################################################################
