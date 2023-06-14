@@ -32,19 +32,21 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: nspcc-dev/neofs-testcases
-          ref: 'master'
+          ref: 'ed751d72579f845b9fa503614541596cfd3c278c'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-dev-env
-          ref: 'master'
+          repository: notimetoname/neofs-dev-env
+          ref: 'feat/add-yml-config'
           path: neofs-dev-env
 
       - name: Checkout neofs-node repository
         uses: actions/checkout@v3
         with:
+          repository: nspcc-dev/neofs-node
+          ref: 'c4f596799d604096ef0a528a0584d687ca0d7c99'
           path: neofs-node
 
 ################################################################
@@ -210,7 +212,7 @@ jobs:
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
-        timeout-minutes: 480
+        timeout-minutes: 10
         if: github.event_name != 'pull_request'
         run: |
           source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
