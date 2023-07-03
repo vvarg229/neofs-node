@@ -162,6 +162,15 @@ var (
 		RunE: dumpContractHashes,
 	}
 
+	dumpNamesCmd = &cobra.Command{
+		Use:   "dump-names",
+		Short: "Dump known registred NNS names and expirations",
+		PreRun: func(cmd *cobra.Command, _ []string) {
+			_ = viper.BindPFlag(endpointFlag, cmd.Flags().Lookup(endpointFlag))
+		},
+		RunE: dumpNames,
+	}
+
 	dumpNetworkConfigCmd = &cobra.Command{
 		Use:   "dump-config",
 		Short: "Dump NeoFS network config",
@@ -197,6 +206,16 @@ var (
 			_ = viper.BindPFlag(endpointFlag, cmd.Flags().Lookup(endpointFlag))
 		},
 		RunE: dumpContainers,
+	}
+
+	renewDomainCmd = &cobra.Command{
+		Use:   "renew-domain",
+		Short: "Renew NNS domain",
+		PreRun: func(cmd *cobra.Command, _ []string) {
+			_ = viper.BindPFlag(alphabetWalletsFlag, cmd.Flags().Lookup(alphabetWalletsFlag))
+			_ = viper.BindPFlag(endpointFlag, cmd.Flags().Lookup(endpointFlag))
+		},
+		RunE: renewDomain,
 	}
 
 	restoreContainersCmd = &cobra.Command{
@@ -271,6 +290,10 @@ func init() {
 	dumpContractHashesCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")
 	dumpContractHashesCmd.Flags().String(customZoneFlag, "", "Custom zone to search.")
 
+	RootCmd.AddCommand(dumpNamesCmd)
+	dumpNamesCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")
+	dumpNamesCmd.Flags().StringP(nameDomainFlag, "d", "", "Filter by domain")
+
 	RootCmd.AddCommand(dumpNetworkConfigCmd)
 	dumpNetworkConfigCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")
 
@@ -297,6 +320,12 @@ func init() {
 	dumpContainersCmd.Flags().String(containerContractFlag, "", "Container contract hash (for networks without NNS)")
 	dumpContainersCmd.Flags().StringSlice(containerIDsFlag, nil, "Containers to dump")
 
+	RootCmd.AddCommand(renewDomainCmd)
+	renewDomainCmd.Flags().String(alphabetWalletsFlag, "", "Path to alphabet wallets dir")
+	renewDomainCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")
+	renewDomainCmd.Flags().StringP(nameDomainFlag, "d", "", "Domain")
+	renewDomainCmd.Flags().BoolP(recursiveFlag, "u", false, "Recursive (renew all subdomain as well)")
+
 	RootCmd.AddCommand(restoreContainersCmd)
 	restoreContainersCmd.Flags().String(alphabetWalletsFlag, "", "Path to alphabet wallets dir")
 	restoreContainersCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")
@@ -314,8 +343,6 @@ func init() {
 	refillGasCmd.Flags().String(walletAddressFlag, "", "Address of wallet")
 	refillGasCmd.Flags().String(refillGasAmountFlag, "", "Additional amount of GAS to transfer")
 	refillGasCmd.MarkFlagsMutuallyExclusive(walletAddressFlag, storageWalletFlag)
-
-	RootCmd.AddCommand(cmdSubnet)
 
 	RootCmd.AddCommand(depositNotaryCmd)
 	depositNotaryCmd.Flags().StringP(endpointFlag, "r", "", "N3 RPC node endpoint")

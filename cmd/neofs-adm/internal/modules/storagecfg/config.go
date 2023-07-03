@@ -12,9 +12,6 @@ node:
     - {{ .AnnouncedAddress }}
   attribute_0: UN-LOCODE:{{ .Attribute.Locode }}
   relay: {{ .Relay }}  # start Storage node in relay mode without bootstrapping into the Network map
-  subnet:
-    exit_zero: false # toggle entrance to zero subnet (overrides corresponding attribute and occurrence in entries)
-    entries: [] # list of IDs of subnets to enter in a text format of NeoFS API protocol (overrides corresponding attributes)
 
 grpc:
   num: 1  # total number of listener endpoints
@@ -38,9 +35,9 @@ control:
 morph:
   dial_timeout: 20s  # timeout for side chain NEO RPC client connection
   cache_ttl: 15s  # use TTL cache for side chain GET operations
-  rpc_endpoint:  # side chain N3 RPC endpoints
+  endpoints:  # side chain N3 RPC endpoints
     {{- range .MorphRPC }}
-    - address: wss://{{.}}/ws{{end}}
+    - wss://{{.}}/ws{{end}}
 {{if not .Relay }}
 storage:
   shard_pool_size: 15  # size of per-shard worker pools used for PUT operations
