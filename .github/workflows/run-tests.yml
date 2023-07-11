@@ -207,7 +207,9 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           whoami
-          source venv.local-pytest/bin/activate && venv.local-pytest/bin/python -m pytest --show-capture=no -k "test_rpc_reconnection" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
+          sudo su
+          whoami
+          source venv.local-pytest/bin/activate && pytest --show-capture=no -k "test_rpc_reconnection" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
