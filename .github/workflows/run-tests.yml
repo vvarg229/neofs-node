@@ -206,6 +206,8 @@ jobs:
         timeout-minutes: 120
         if: github.event_name == 'pull_request'
         run: |
+          groups
+          groups runner
           whoami
           sudo su
           whoami
