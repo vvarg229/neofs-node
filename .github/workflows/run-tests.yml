@@ -206,13 +206,6 @@ jobs:
         timeout-minutes: 120
         if: github.event_name == 'pull_request'
         run: |
-          groups
-          groups runner
-          whoami
-          python ./tools/src/setup_pid_permissions.py $USER
-          groups
-          groups runner
-          whoami
           source venv.local-pytest/bin/activate && pytest --show-capture=no -k "test_rpc_reconnection" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
