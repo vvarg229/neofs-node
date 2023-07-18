@@ -234,7 +234,7 @@ jobs:
         timeout-minutes: 480
         if: github.event_name == 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --show-capture=no --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/s3_gate/test_s3_object.py
+          source venv.local-pytest/bin/activate && pytest -k test_s3_copy_object --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/s3_gate/test_s3_object.py
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
