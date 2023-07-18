@@ -32,6 +32,7 @@ jobs:
       TEST_RESULTS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
       TEST_RESULTS_NEOFS_NETWORK_DOMAIN: "t5.fs.neo.org"
       TEST_RESULTS_CID: "86C4P6uJC7gb5n3KkwEGpXRfdczubXyRNW5N9KeJRW73"
+      AWS_EC2_METADATA_DISABLED: "true"
     steps:
       - name: Get the current date
         id: date
