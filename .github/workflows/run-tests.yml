@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: vvarg229/neofs-testcases
-          ref: '798-fix'
+          ref: 'aws-region'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
