@@ -46,8 +46,8 @@ jobs:
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: vvarg229/neofs-testcases
-          ref: 'wait-acl'
+          repository: nspcc-dev/neofs-testcases
+          ref: 'master'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
@@ -235,7 +235,7 @@ jobs:
         timeout-minutes: 480
         if: github.event_name == 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/s3_gate/
+          source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
