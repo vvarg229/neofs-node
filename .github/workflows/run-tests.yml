@@ -25,7 +25,7 @@ permissions: write-all
 
 jobs:
   run_system_tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 500
     env:
       TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
