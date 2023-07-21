@@ -245,11 +245,61 @@ jobs:
           source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
-      - name: Log free space
+      - name: Log environment after tests
         run: |
           echo "Check free space"
           df -h
           echo "=========================================="
+
+          echo "Check /etc/hosts"
+          cat /etc/hosts
+          echo "=========================================="
+
+          echo "Check docker images"
+          docker images
+          echo "=========================================="
+
+          echo "Check docker ps"
+          docker ps
+          echo "=========================================="
+
+          echo "Check neo-go version"
+          neo-go --version
+          echo "=========================================="
+
+          echo "Check neofs-s3-authmate version"
+          neofs-s3-authmate --version
+          echo "=========================================="
+
+          echo "Check neofs-s3-gw version"
+          echo "=========================================="
+          neofs-s3-gw --version
+          echo "=========================================="
+
+          echo "Check neofs-adm version"
+          neofs-adm --version
+          echo "=========================================="
+
+          echo "Check neofs-ir version"
+          neofs-ir --version
+          echo "=========================================="
+
+          echo "Check neofs-lens version"
+          neofs-lens --version
+          echo "=========================================="
+
+          echo "Check neofs-cli version"
+          neofs-cli --version
+          echo "=========================================="
+
+          echo "Check vendor dir"
+          ls -lah "${GITHUB_WORKSPACE}/neofs-dev-env/vendor"
+          echo "=========================================="
+
+          echo "Check bin dir"
+          ls -lah "${GITHUB_WORKSPACE}/neofs-node/bin"
+          echo "=========================================="
+        working-directory: neofs-dev-env
 
 ################################################################
       - name: Generate Allure report
