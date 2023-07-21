@@ -245,6 +245,12 @@ jobs:
           source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
+      - name: Log free space
+        run: |
+          echo "Check free space"
+          df -h
+          echo "=========================================="
+
 ################################################################
       - name: Generate Allure report
         timeout-minutes: 60
