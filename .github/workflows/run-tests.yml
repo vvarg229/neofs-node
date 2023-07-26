@@ -25,14 +25,29 @@ permissions: write-all
 
 jobs:
   run_system_tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 500
+    env:
+      TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
+      TEST_RESULTS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
+      TEST_RESULTS_NEOFS_NETWORK_DOMAIN: "t5.fs.neo.org"
+      TEST_RESULTS_CID: "86C4P6uJC7gb5n3KkwEGpXRfdczubXyRNW5N9KeJRW73"
+      AWS_EC2_METADATA_DISABLED: "true"
     steps:
+      - name: Get the current date
+        id: date
+        run: echo "::set-output name=timestamp::$(date +%s)"
+
+      - name: Set RUN_ID
+        env:
+          TIMESTAMP: ${{ steps.date.outputs.timestamp }}
+        run: echo "RUN_ID=${{ github.run_number }}-$TIMESTAMP" >> $GITHUB_ENV
+
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-testcases
-          ref: 'master'
+          repository: vvarg229/neofs-testcases
+          ref: 'debug-failing'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
@@ -47,19 +62,27 @@ jobs:
         with:
           path: neofs-node
 
-################################################################
+      - name: Download latest stable neofs-cli for uploading reports to NeoFS
+        uses: dsaltares/fetch-gh-release-asset@1.1.1
+        with:
+          repo: 'nspcc-dev/neofs-node'
+          version: 'tags/v0.37.0'
+          file: 'neofs-cli-amd64'
+          target: 'neofs-node-stable/neofs-cli'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Chmod latest stable neofs-cli
+        run: |
+          sudo chmod a+x neofs-cli
+        working-directory: neofs-node-stable
+
+#################################################################
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           cache: true
-          go-version: '1.20'
+          go-version: '1.20.5'
       - run: go version
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10.11'
-      - run: python --version
 
 # Hashlib uses OpenSSL for ripemd160 and apparently OpenSSL disabled some older crypto algos around version 3.0
 # in November 2021. All the functions are still there but require manual enabling.
@@ -80,10 +103,6 @@ jobs:
 #
 # [legacy_sect]
 # activate = 1
-      - name: Fix OpenSSL ripemd160
-        run: |
-          sudo python ./tools/src/openssl_config_fix.py
-        working-directory: neofs-testcases
 
 ################################################################
       - name: Build neofs-node (neofs-cli and neofs-adm)
@@ -123,23 +142,91 @@ jobs:
           cp .github/testcases-env ${GITHUB_WORKSPACE}/neofs-dev-env/.env
         working-directory: neofs-node
 
-      - name: Prepare hosts
-        timeout-minutes: 5
-        run: |
-          make get
-          sudo ./bin/update_hosts.sh
-          sudo chmod a+w vendor/hosts
-        working-directory: neofs-dev-env
-
-      - name: Prepare test environment
-        timeout-minutes: 30
-        run: |
-          make prepare-test-env
-          echo "$(pwd)/vendor" >> $GITHUB_PATH
-        working-directory: neofs-dev-env
 
 ################################################################
       - name: Log environment
+        run: |
+          echo "Check ip a"
+          ip a
+          echo "=========================================="
+
+          echo "Check ip r"
+          ip r
+          echo "=========================================="
+
+          echo "Check free space"
+          df -h
+          echo "=========================================="
+
+          echo "Check /etc/hosts"
+          cat /etc/hosts
+          echo "=========================================="
+
+          echo "Check docker images"
+          docker images
+          echo "=========================================="
+
+          echo "Check docker ps"
+          docker ps
+          echo "=========================================="
+
+          echo "Check neo-go version"
+          neo-go --version
+          echo "=========================================="
+
+          echo "Check neofs-s3-authmate version"
+          neofs-s3-authmate --version
+          echo "=========================================="
+
+          echo "Check neofs-s3-gw version"
+          echo "=========================================="
+          neofs-s3-gw --version
+          echo "=========================================="
+
+          echo "Check neofs-adm version"
+          neofs-adm --version
+          echo "=========================================="
+
+          echo "Check neofs-ir version"
+          neofs-ir --version
+          echo "=========================================="
+
+          echo "Check neofs-lens version"
+          neofs-lens --version
+          echo "=========================================="
+
+          echo "Check neofs-cli version"
+          neofs-cli --version
+          echo "=========================================="
+
+          echo "Check bin dir"
+          ls -lah "${GITHUB_WORKSPACE}/neofs-node/bin"
+          echo "=========================================="
+        working-directory: neofs-dev-env
+
+################################################################
+      - name: Prepare venv
+        timeout-minutes: 30
+        run: |
+          make venv.local-pytest
+        working-directory: neofs-testcases
+
+      - name: Run Sanity tests for pull requests
+        timeout-minutes: 480
+        if: github.event_name == 'pull_request'
+        run: |
+          source venv.local-pytest/bin/activate && pytest -k test_s3_object_multipart --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites/services/s3_gate/
+        working-directory: neofs-testcases
+
+      - name: Run all tests for other events
+        timeout-minutes: 480
+        if: github.event_name != 'pull_request'
+        run: |
+          source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
+        working-directory: neofs-testcases
+
+      - name: Log environment after tests
+        if: always()
         run: |
           echo "Check free space"
           df -h
@@ -186,67 +273,47 @@ jobs:
           neofs-cli --version
           echo "=========================================="
 
-          echo "Check vendor dir"
-          ls -lah "${GITHUB_WORKSPACE}/neofs-dev-env/vendor"
-          echo "=========================================="
-
           echo "Check bin dir"
           ls -lah "${GITHUB_WORKSPACE}/neofs-node/bin"
           echo "=========================================="
         working-directory: neofs-dev-env
 
 ################################################################
-      - name: Prepare venv
-        timeout-minutes: 30
-        run: |
-          make venv.local-pytest
-        working-directory: neofs-testcases
-
-      - name: Run Sanity tests for pull requests
-        timeout-minutes: 120
-        if: github.event_name == 'pull_request'
-        run: |
-          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
-        working-directory: neofs-testcases
-
-      - name: Run all tests for other events
-        timeout-minutes: 480
-        if: github.event_name != 'pull_request'
-        run: |
-          source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
-        working-directory: neofs-testcases
-
-################################################################
-      - name: Get Allure history
-        timeout-minutes: 60
-        uses: actions/checkout@v3
-        if: always()
-        with:
-          ref: gh-pages
-          path: gh-pages
-
-      - name: Allure Report action from marketplace
+      - name: Generate Allure report
         timeout-minutes: 60
         uses: simple-elf/allure-report-action@v1.6
         if: always()
         id: allure-report
         with:
-          keep_reports: 200
+          keep_reports: 100000
           allure_results: allure-results
           allure_report: allure-report
-          gh_pages: gh-pages
           allure_history: allure-history
 
-      - name: Deploy report to Github Pages
-        timeout-minutes: 120
+      - name: Remove testing neofs-cli
         if: always()
-        uses: peaceiris/actions-gh-pages@v3.9.3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: allure-history
-          force_orphan: true
-          enable_jekyll: true
+        run: |
+          make clean
+        working-directory: neofs-node
+
+      - name: Enable stable neofs-cli
+        if: always()
+        run: |
+          echo "$(pwd)" >> $GITHUB_PATH
+        working-directory: neofs-node-stable
+
+      - name: Create wallet
+        if: always()
+        run: |
+          echo "$TEST_RESULTS_WALLET" | base64 -d > wallet.json
+        working-directory: neofs-testcases
+
+      - name: Put allure report to NeoFS
+        if: always()
+        run: |
+          sudo chmod -R a+rw ${GITHUB_WORKSPACE}/allure-report
+          source venv.local-pytest/bin/activate && python ./tools/src/process-allure-reports.py --neofs_domain $TEST_RESULTS_NEOFS_NETWORK_DOMAIN --run_id $RUN_ID --cid $TEST_RESULTS_CID --allure_report ${GITHUB_WORKSPACE}/allure-report --wallet wallet.json
+        working-directory: neofs-testcases
 
       - name: Post the link to the report
         timeout-minutes: 60
@@ -257,4 +324,4 @@ jobs:
           context: 'Test report'
           state: 'success'
           sha: ${{github.event.pull_request.head.sha || github.sha}}
-          target_url: https://${{ github.repository_owner }}.github.io/neofs-node/${{ github.run_number }}
+          target_url: https://http.${{ env.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/index.html
