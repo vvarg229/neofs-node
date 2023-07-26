@@ -142,20 +142,6 @@ jobs:
           cp .github/testcases-env ${GITHUB_WORKSPACE}/neofs-dev-env/.env
         working-directory: neofs-node
 
-      - name: Prepare hosts
-        timeout-minutes: 5
-        run: |
-          make get
-          make hosts
-          sudo chmod a+w vendor/hosts
-        working-directory: neofs-dev-env
-
-      - name: Prepare test environment
-        timeout-minutes: 30
-        run: |
-          sudo make prepare-test-env
-          echo "$(pwd)/vendor" >> $GITHUB_PATH
-        working-directory: neofs-dev-env
 
 ################################################################
       - name: Log environment
