@@ -199,10 +199,6 @@ jobs:
           neofs-cli --version
           echo "=========================================="
 
-          echo "Check vendor dir"
-          ls -lah "${GITHUB_WORKSPACE}/neofs-dev-env/vendor"
-          echo "=========================================="
-
           echo "Check bin dir"
           ls -lah "${GITHUB_WORKSPACE}/neofs-node/bin"
           echo "=========================================="
@@ -275,10 +271,6 @@ jobs:
 
           echo "Check neofs-cli version"
           neofs-cli --version
-          echo "=========================================="
-
-          echo "Check vendor dir"
-          ls -lah "${GITHUB_WORKSPACE}/neofs-dev-env/vendor"
           echo "=========================================="
 
           echo "Check bin dir"
