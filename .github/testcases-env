@@ -38,11 +38,12 @@ REST_GW_VERSION=0.5.0
 REST_GW_IMAGE=nspccdev/neofs-rest-gw
 
 # S3 Gate
-S3_GW_VERSION=0.27.1
+S3_GW_VERSION=_TAG_
 S3_GW_IMAGE=nspccdev/neofs-s3-gw
 S3_GW_PLATFORM=linux-amd64
-S3_AUTHMATE_URL=https://github.com/nspcc-dev/neofs-s3-gw/releases/download/v${S3_GW_VERSION}/neofs-s3-authmate-${S3_GW_PLATFORM}
-S3_GW_URL=https://github.com/nspcc-dev/neofs-s3-gw/releases/download/v${S3_GW_VERSION}/neofs-s3-gw-${S3_GW_PLATFORM}
+#S3_AUTHMATE_URL=https://github.com/nspcc-dev/neofs-s3-gw/releases/download/v${S3_GW_VERSION}/neofs-s3-authmate-${S3_GW_PLATFORM}
+#S3_GW_URL=https://github.com/nspcc-dev/neofs-s3-gw/releases/download/v${S3_GW_VERSION}/neofs-s3-gw-${S3_GW_PLATFORM}
+S3_GW_PATH=../neofs-s3-gw/bin
 
 # Coredns
 COREDNS_VERSION=v016
@@ -67,3 +68,5 @@ NEOFS_STORAGE_CONTROL_GRPC_ENDPOINT_4=s04.${LOCAL_DOMAIN}:8081
 
 # NeoFS adm binary
 NEOFS_ADM_PATH=../neofs-node/bin/neofs-adm
+
+S3_GW_RPC_ENDPOINT=http://morph-chain.neofs.devenv:30333

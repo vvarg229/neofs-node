@@ -40,15 +40,15 @@ jobs:
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-testcases
-          ref: 'master'
+          repository: vvarg229/neofs-testcases
+          ref: 'obj_size'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-dev-env
-          ref: 'feat/make-health-check-not-depend-on-shell'
+          repository: vvarg229/neofs-dev-env
+          ref: 'obj-size'
           path: neofs-dev-env
 
       - name: Checkout neofs-node repository
@@ -68,6 +68,15 @@ jobs:
         run: |
           sudo chmod a+x neofs-cli
         working-directory: neofs-node-stable
+
+#################################################################
+      - name: Checkout neofs-s3-gw repository - test https://github.com/nspcc-dev/neofs-s3-gw/pull/807
+        uses: actions/checkout@v3
+        with:
+          repository: nspcc-dev/neofs-s3-gw
+          ref: '806-upgrade-to-sdk-rc10'
+          path: neofs-s3-gw
+#################################################################
 
 #################################################################
       - name: Set up Go
@@ -120,6 +129,11 @@ jobs:
         run: |
           echo "CURRENT_TAG=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
         working-directory: neofs-node
+################################################################
+      - name: Get TAG for neofs-s3-gw docker images
+        run: |
+          echo "CURRENT_TAG_S3_GW=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
+        working-directory: neofs-node
 
       - name: Build NeoFS storage docker image
         timeout-minutes: 30
@@ -127,16 +141,30 @@ jobs:
           make image-storage
         working-directory: neofs-node
 
+################################################################
       - name: Build NeoFS Inner Ring docker image
         timeout-minutes: 30
         run: |
           make image-ir
         working-directory: neofs-node
 
+################################################################
+      - name: Build neofs-s3-gw repository - test https://github.com/nspcc-dev/neofs-s3-gw/pull/807
+        timeout-minutes: 30
+        run: |
+          make sync-tree
+          make dep
+          make image
+          make docker/all
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+          echo "CURRENT_TAG_S3_GW=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
+        working-directory: neofs-s3-gw
+
       - name: Add NeoFS storage and NeoFS ir docker TAGs to testcases-env config file
         run: |
           sed -i "s/NODE_VERSION=.*/NODE_VERSION=${{ env.CURRENT_TAG }}/g" .github/testcases-env
           sed -i "s/IR_VERSION=.*/IR_VERSION=${{ env.CURRENT_TAG }}/g" .github/testcases-env
+          sed -i "s/S3_GW_VERSION=.*/S3_GW_VERSION=${{ env.CURRENT_TAG_S3_GW }}/g" .github/testcases-env
         working-directory: neofs-node
 
 ################################################################
@@ -225,10 +253,10 @@ jobs:
         working-directory: neofs-testcases
 
       - name: Run Sanity tests for pull requests
-        timeout-minutes: 120
+        timeout-minutes: 480
         if: github.event_name == 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
+          source venv.local-pytest/bin/activate && pytest -k test_s3_object_multipart --show-capture=no --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
