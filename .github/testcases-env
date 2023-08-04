@@ -68,3 +68,5 @@ NEOFS_STORAGE_CONTROL_GRPC_ENDPOINT_4=s04.${LOCAL_DOMAIN}:8081
 
 # NeoFS adm binary
 NEOFS_ADM_PATH=../neofs-node/bin/neofs-adm
+
+S3_GW_RPC_ENDPOINT=http://morph-chain.neofs.devenv:30333
