@@ -70,6 +70,14 @@ jobs:
         working-directory: neofs-node-stable
 
 #################################################################
+      - name: Checkout neofs-s3-gw repository - test https://github.com/nspcc-dev/neofs-s3-gw/pull/807
+        uses: actions/checkout@v3
+        with:
+          repository: nspcc-dev/neofs-s3-gw
+          ref: '806-upgrade-to-sdk-rc10'
+          path: neofs-s3-gw
+
+#################################################################
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -120,6 +128,11 @@ jobs:
         run: |
           echo "CURRENT_TAG=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
         working-directory: neofs-node
+################################################################
+      - name: Get TAG for neofs-s3-gw docker images
+        run: |
+          echo "CURRENT_TAG_S3_GW=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
+        working-directory: neofs-node
 
       - name: Build NeoFS storage docker image
         timeout-minutes: 30
@@ -127,16 +140,28 @@ jobs:
           make image-storage
         working-directory: neofs-node
 
+################################################################
       - name: Build NeoFS Inner Ring docker image
         timeout-minutes: 30
         run: |
           make image-ir
         working-directory: neofs-node
 
+################################################################
+      - name: Build neofs-s3-gw repository - test https://github.com/nspcc-dev/neofs-s3-gw/pull/807
+        timeout-minutes: 30
+        run: |
+          make image
+          make
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+          echo "CURRENT_TAG_S3_GW=$( make version | sed 's/^v//' )" >> $GITHUB_ENV
+        working-directory: neofs-s3-gw
+
       - name: Add NeoFS storage and NeoFS ir docker TAGs to testcases-env config file
         run: |
           sed -i "s/NODE_VERSION=.*/NODE_VERSION=${{ env.CURRENT_TAG }}/g" .github/testcases-env
           sed -i "s/IR_VERSION=.*/IR_VERSION=${{ env.CURRENT_TAG }}/g" .github/testcases-env
+          sed -i "s/S3_GW_VERSION=.*/S3_GW_VERSION=${{ env.CURRENT_TAG_S3_GW }}/g" .github/testcases-env
         working-directory: neofs-node
 
 ################################################################
