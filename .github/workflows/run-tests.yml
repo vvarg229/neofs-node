@@ -151,6 +151,7 @@ jobs:
       - name: Build neofs-s3-gw repository - test https://github.com/nspcc-dev/neofs-s3-gw/pull/807
         timeout-minutes: 30
         run: |
+          make dep
           make image
           make docker/all
           echo "$(pwd)/bin" >> $GITHUB_PATH
