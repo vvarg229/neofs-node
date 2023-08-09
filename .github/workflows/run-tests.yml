@@ -35,10 +35,12 @@ jobs:
         id: date
         run: echo "::set-output name=timestamp::$(date +%s)"
 
-      - name: Set RUN_ID
+      - name: Set RUN_ID and CONTEXT
         env:
           TIMESTAMP: ${{ steps.date.outputs.timestamp }}
-        run: echo "RUN_ID=${{ github.run_number }}-$TIMESTAMP" >> $GITHUB_ENV
+        run: |
+          echo "RUN_ID=${{ github.run_number }}-$TIMESTAMP-${{matrix.test_set}}" >> $GITHUB_ENV
+          echo "CONTEXT=Test_report_from_${{matrix.test_set}}" >> $GITHUB_ENV
 
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
@@ -303,7 +305,7 @@ jobs:
         uses: Sibz/github-status-action@v1
         with:
           authToken: ${{secrets.GITHUB_TOKEN}}
-          context: 'Test report'
+          context: ${{env.CONTEXT}}
           state: 'success'
           sha: ${{github.event.pull_request.head.sha || github.sha}}
           target_url: https://${{ env.TEST_RESULTS_HTTP_GATE }}/${{ env.TEST_RESULTS_CID }}/${{ env.RUN_ID }}/index.html
