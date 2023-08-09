@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        test_set: [ sanity_tests, all_tests ]
+        test_set: [ smoke_tests, sanity_tests, all_tests ]
     timeout-minutes: 500
     steps:
       - name: Get the current date
@@ -228,16 +228,23 @@ jobs:
         working-directory: neofs-dev-env
 
 ################################################################
+      - name: Run Smoke tests for pull requests
+        timeout-minutes: 120
+        if: github.event_name == 'pull_request' && matrix.test_set == 'smoke_tests'
+        run: |
+          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "smoke" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
+        working-directory: neofs-testcases
+
       - name: Run Sanity tests for pull requests
         timeout-minutes: 120
-        if: github.event_name == 'pull_request' && matrix.sanity_tests
+        if: github.event_name == 'pull_request' && matrix.test_set == 'sanity_tests'
         run: |
           source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
         timeout-minutes: 480
-        if: github.event_name != 'pull_request' || matrix.all_tests
+        if: github.event_name != 'pull_request' || matrix.test_set == 'all_tests'
         run: |
           source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
