@@ -29,6 +29,7 @@ jobs:
     strategy:
       matrix:
         test_set: [ smoke_tests, sanity_tests, all_tests ]
+      fail-fast: false
     timeout-minutes: 500
     steps:
       - name: Get the current date
