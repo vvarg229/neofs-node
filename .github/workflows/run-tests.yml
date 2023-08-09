@@ -26,6 +26,9 @@ permissions: write-all
 jobs:
   run_system_tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test_set: [ sanity_tests, all_tests ]
     timeout-minutes: 500
     steps:
       - name: Get the current date
@@ -227,14 +230,14 @@ jobs:
 ################################################################
       - name: Run Sanity tests for pull requests
         timeout-minutes: 120
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && matrix.sanity_tests
         run: |
           source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
         timeout-minutes: 480
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || matrix.all_tests
         run: |
           source venv.local-pytest/bin/activate && pytest --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
