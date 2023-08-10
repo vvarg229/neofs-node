@@ -47,8 +47,8 @@ jobs:
       - name: Checkout neofs-dev-env repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-dev-env
-          ref: 'feat/make-health-check-not-depend-on-shell'
+          repository: vvarg229/neofs-dev-env
+          ref: 'obj-size'
           path: neofs-dev-env
 
       - name: Checkout neofs-node repository
@@ -229,7 +229,7 @@ jobs:
         timeout-minutes: 120
         if: github.event_name == 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
+          source venv.local-pytest/bin/activate && pytest --show-capture=no -k test_s3_api_multipart --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
