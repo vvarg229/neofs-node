@@ -40,8 +40,8 @@ jobs:
       - name: Checkout neofs-testcases repository
         uses: actions/checkout@v3
         with:
-          repository: nspcc-dev/neofs-testcases
-          ref: 'master'
+          repository: vvarg229/neofs-testcases
+          ref: 'expire-allure'
           path: neofs-testcases
 
       - name: Checkout neofs-dev-env repository
@@ -229,7 +229,7 @@ jobs:
         timeout-minutes: 120
         if: github.event_name == 'pull_request'
         run: |
-          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "sanity" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
+          source venv.local-pytest/bin/activate && pytest --show-capture=no -m "smoke" --alluredir=${GITHUB_WORKSPACE}/allure-results pytest_tests/testsuites
         working-directory: neofs-testcases
 
       - name: Run all tests for other events
@@ -271,6 +271,31 @@ jobs:
           echo "$TEST_RESULTS_WALLET" | base64 -d > wallet.json
         working-directory: neofs-testcases
 
+      - name: Define expire
+        if: always()
+        env:
+          TEST_RESULTS_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
+          TEST_RESULTS_NEOFS_NETWORK_DOMAIN: ${{ vars.TEST_RESULTS_NEOFS_NETWORK_DOMAIN }}
+          MASTER_EXPIRATION_PERIOD: ${{ vars.MASTER_EXPIRATION_PERIOD }}
+          PR_EXPIRATION_PERIOD: ${{ vars.PR_EXPIRATION_PERIOD }}
+          MANUAL_RUN_EXPIRATION_PERIOD: ${{ vars.MANUAL_RUN_EXPIRATION_PERIOD }}
+          OTHER_EXPIRATION_PERIOD: ${{ vars.OTHER_EXPIRATION_PERIOD }}
+        run: |
+          CURRENT_EPOCH=$(NEOFS_CLI_PASSWORD=$TEST_RESULTS_PASSWORD neofs-cli netmap epoch --rpc-endpoint st1.$TEST_RESULTS_NEOFS_NETWORK_DOMAIN:8080)
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            EXPIRE=$((MASTER_EXPIRATION_PERIOD + CURRENT_EPOCH))
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            EXPIRE=$((PR_EXPIRATION_PERIOD + CURRENT_EPOCH))
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            EXPIRE=0 # For test reports from releases - no expiration period
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            EXPIRE=$((MANUAL_RUN_EXPIRATION_PERIOD + CURRENT_EPOCH))
+          else
+            EXPIRE=$((OTHER_EXPIRATION_PERIOD + CURRENT_EPOCH))
+          fi
+          echo "EXPIRE=$EXPIRE" >> $GITHUB_ENV
+        working-directory: neofs-testcases
+
       - name: Put allure report to NeoFS
         id: put_report
         if: always() && steps.prepare_test_env.outcome == 'success'
@@ -280,7 +305,9 @@ jobs:
           TEST_RESULTS_CID: ${{ vars.TEST_RESULTS_CID }}
         run: |
           sudo chmod -R a+rw ${GITHUB_WORKSPACE}/allure-report
-          source venv.local-pytest/bin/activate && python ./tools/src/process-allure-reports.py --neofs_domain $TEST_RESULTS_NEOFS_NETWORK_DOMAIN --run_id $RUN_ID --cid $TEST_RESULTS_CID --allure_report ${GITHUB_WORKSPACE}/allure-report --wallet wallet.json
+          source venv.local-pytest/bin/activate && python ./tools/src/process-allure-reports.py --expire-at $EXPIRE \
+          --neofs_domain $TEST_RESULTS_NEOFS_NETWORK_DOMAIN --run_id $RUN_ID --cid $TEST_RESULTS_CID \
+          --allure_report ${GITHUB_WORKSPACE}/allure-report --wallet wallet.json
         working-directory: neofs-testcases
 
       - name: Post the link to the report
