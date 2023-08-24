@@ -17,6 +17,7 @@ minor release, the component will be purged, so be prepared (see `Updating` sect
 - New `blobovnicza-to-peapod` tool providing blobovnicza-to-peapod data migration (#2453)
 - SN's version and capacity is announced via the attributes automatically but can be overwritten explicitly (#2455, #602)
 - `peapod` command for `neofs-lens` (#2507)
+-  New CLI exit code for awaiting timeout (#2380)
 
 ### Fixed
 - `neo-go` RPC connection loss handling (#1337)
@@ -28,6 +29,7 @@ minor release, the component will be purged, so be prepared (see `Updating` sect
 - Storage node no longer ignores unhealthy shards on startup (#2464)
 - Processing of status errors returned by API client from NeoFS SDK RC-9 (#2465)
 - `neofs-lens write-cache list` command duplication (#2505)
+- `neofs-adm` works with contract wallet in `init` and `update-contracts` commands only (#2134)
 
 ### Removed
 - Deprecated `morph.rpc_endpoint` SN and `morph.endpoint.client` IR config sections (#2400)
