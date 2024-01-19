@@ -221,7 +221,7 @@ jobs:
       - name: Publish to NeoFS
         id: put_report
         if: always() && steps.prepare_test_env.outcome == 'success'
-        uses: nspcc-dev/gh-push-allure-report-to-neofs@master
+        uses: vvarg229/gh-push-allure-report-to-neofs@fix-debug
         with:
           NEOFS_WALLET: ${{ secrets.TEST_RESULTS_WALLET }}
           NEOFS_WALLET_PASSWORD: ${{ secrets.TEST_RESULTS_PASSWORD }}
